@@ -10,17 +10,29 @@ import os
 /// 10 s shutdown watchdog never fired). The app never exited, and every
 /// later main-actor request (`action.run`) timed out as `not_run`.
 ///
-/// Armed when the engines start to stop, a dedicated thread ends the process
-/// if it is still running `limit` later. By then everything a relaunch
-/// needs is saved (windows, sidebar, browser records, agent page images),
-/// and the run marker says a quit had begun (`AppRunMarker.markQuitting`), so
-/// the next launch restores as after a normal quit. It never waits on the
-/// main thread, and `_exit` runs no atexit handler or C++ destructor that
-/// could wait on the blocked Chromium thread.
+/// Armed when a keep quit is decided (`keepQuitLimit`), or when an End quit's
+/// engines start to stop (`engineStopLimit`), a dedicated thread ends the
+/// process if it is still running `limit` later. By then every save step
+/// ran or passed its limit (windows, sidebar, browser records, agent page
+/// images), and the run marker says a quit had begun
+/// (`AppRunMarker.markQuitting`), so the next launch restores as after a
+/// normal quit. It never waits on the main thread, and `_exit` runs no
+/// atexit handler or C++ destructor that could wait on a blocked thread.
 public nonisolated final class QuitDeadline: Sendable {
-    /// The engines' close wait (3 s, `CEFEngine.shutdown`) and Chromium's
-    /// own 10 s shutdown watchdog, with room for a loaded machine.
-    public static let engineStopLimit: Duration = .seconds(15)
+    /// A quit that keeps the sessions (every quit but End Sessions and End
+    /// Everything) ends this long after it was decided, whatever any step
+    /// does (slow quit, 2026-10-20): the save steps have their own limits
+    /// (`QuitStepLimit`, about 2.6 s at most, a few hundred ms in practice),
+    /// then the engines' close wait (`engineCloseWait`) and CefShutdown.
+    public static let keepQuitLimit: Duration = .milliseconds(3500)
+    /// An End quit ends this long after its sessions ended and the engines
+    /// began to stop: the close wait, then CefShutdown. Chromium's own 10 s
+    /// shutdown watchdog is far too late for a quit the user waits on.
+    public static let engineStopLimit: Duration = .milliseconds(2500)
+    /// How long the quit waits for Chromium to close its browsers before
+    /// CefShutdown (`CEFEngine.shutdown`); a close that takes longer skips
+    /// CefShutdown, as Chromium's own watchdog would.
+    public static let engineCloseWait: Duration = .milliseconds(1500)
 
     private let armed = Atomic<Bool>(false)
     private let end: @Sendable () -> Void
@@ -41,7 +53,7 @@ public nonisolated final class QuitDeadline: Sendable {
             // concurrency-allow: same dedicated thread; nothing signals it, so this is the deadline.
             _ = never.wait(timeout: .now() + seconds)
             Logger(subsystem: "com.cmuxterm.app.next", category: "app.quit")
-                .fault("quit still running \(seconds, privacy: .public) s after the engines began to stop; ending the process")
+                .fault("quit still running \(seconds, privacy: .public) s after its deadline was armed; ending the process")
             end()
         }
         thread.name = "cmux-next quit deadline"
