@@ -269,9 +269,21 @@ Event numbers in `docs/events.md` match `Sources/CmuxEventBus.swift:258-263`:
 | Disk log 16 MiB | `defaultMaxEventLogBytes = 16 * 1024 * 1024` |
 | Path | `~/.cmuxterm/events.jsonl` (`CmuxEventBus.swift:705-708`) |
 
-`seq` and `boot_id` are process-local. A restart or a cursor older than the
-buffer sets `resume.gap`. Clients are expected to snapshot after a gap.
-That contract is usable by an external process that is allowed to connect.
+`boot_id` is process-local (`CmuxEventBus.swift:281`). Production `seq` is
+not. `CmuxEventSequenceStore` leases durable ranges in `events.jsonl.seq`
+under `events.jsonl.seq.lock` (`CmuxEventSequenceStore.swift:4-8`, `18-21`,
+`42-57`). `publishDurableOnPublicationQueue` allocates from that store
+(`CmuxEventBus.swift:409-420`). `loadPersistedEvents` restores the replay
+window from the disk log (`:717`), and `completeRestore` raises the
+high-water mark (`:575-589`).
+
+`subscribe` (`:471`) sets `resume.gap` when restore is still in progress
+(`:499`), when `after` is older than the retained in-memory window (`:529`),
+when `after` is newer than this process (`:532`), or when the durable log
+has unreadable records (`:548-554`). A restart by itself does not. After a
+gap, the client refreshes from snapshot methods. The in-memory replay limit
+stays 4,096. That contract is usable by an external process that is allowed
+to connect.
 
 ## Persistence
 

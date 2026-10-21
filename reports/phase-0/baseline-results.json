@@ -34,7 +34,7 @@
   "implementationCommit": "8926363815581a6b86d4ff2b012fe5a23ef05a66",
   "implementationCommitNote": "SHA of the commit that added the Phase 0 documents. A later commit only records this value in the JSON.",
   "architectureDecisions": [
-    "Recommendation, awaiting approval: staged hybrid ending at option B. Supervise Studio's Next.js server with plain Node. Keep its libSQL file as the only project database. Host the UI in a WKWebView at 127.0.0.1. Do not bundle Studio until the user grants a license. Option A is not recommended."
+    "Recommendation, awaiting approval: staged hybrid ending at option B. Supervise Studio's Next.js server with plain Node. Keep its libSQL file as the only project database. Host the UI in a WKWebView at 127.0.0.1. Do not copy Studio into this repo. Option A is not recommended. Stage 1 as first written is withdrawn: it deferred authentication. The replacement work items are docs/architecture/stage-1-plan.md. Auth delivery is an open choice; the recommendation is a minimal Studio token change. Whether a later bundle is a combined work is for the user and counsel."
   ],
   "knownLimitations": [
     "macOS app build and unit tests were not run.",
@@ -46,7 +46,9 @@
     "No GitHub Actions workflow was added or dispatched.",
     "Studio SHA 35a0d1af631a53958883e61c1b98ab072195b11c was supplied as a git archive with no .git, so the commit object was not recomputed here.",
     "pnpm test:e2e was not run. pnpm test does not include apps/e2e.",
-    "The Electron binary was not launched. Desktop tests passed under Vitest with a stub."
+    "The Electron binary was not launched. Desktop tests passed under Vitest with a stub.",
+    "next build and next start were not run. pnpm test does not start the server.",
+    "Any app unit-test job has to provision a verified GhosttyKit.xcframework before test-unit.sh. No workflow file was added."
   ],
   "checks": [
     {
@@ -311,13 +313,15 @@
     "repoModified": false,
     "pushed": false,
     "committedIntoCmux": false,
-    "license": "none found. No LICENSE file. No license field in the root or any workspace package.json. Treated as all-rights-reserved, owned by the user.",
+    "license": "Reading of the files only: no LICENSE file and no license field in the root or any workspace package.json. No evidence in the archive that the user owns every contribution. Whether bundling with GPL cmux is a combined work is for the user and counsel. Not a legal conclusion.",
     "claimsVerified": true,
     "recommendation": "staged hybrid ending at B, awaiting approval",
     "checks": {
       "pnpmInstallExit": 0,
       "typecheckExit": 0,
-      "testExit": 0
+      "testExit": 0,
+      "nextBuildExit": null,
+      "nextStartExit": null
     }
   },
   "addendum": {
@@ -325,8 +329,11 @@
     "implementationArchitectureApproved": false,
     "phase1Started": false,
     "adr": "docs/architecture/adr-0001-orchestration-backend.md",
-    "adrStatus": "recommended_staged_hybrid_awaiting_approval",
-    "studioSnapshotAudited": true
+    "adrStatus": "recommended_staged_hybrid_stage1_scope_withdrawn_awaiting_approval",
+    "studioSnapshotAudited": true,
+    "codexReview": "docs/architecture/review-response-codex-1.md",
+    "stage1Plan": "docs/architecture/stage-1-plan.md",
+    "authChoice": "open. Recommendation is a minimal Studio token change. Alternative is an authenticated native proxy, which does not deny a second local process while Studio listens without a token."
   },
   "addendumCommit": "23319ce2a4b37d92f48ec5332d8e4d8b498a96cd",
   "addendumCommitNote": "SHA of the commit that added the addendum documents. A later commit only records this value.",

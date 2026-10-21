@@ -21,11 +21,16 @@ cmux.
 
 Do this in two stages:
 
-1. **Dev supervision, no bundling.** The cmux app starts the user's existing
-   Studio checkout with plain Node (`pnpm dev` or `next start`), sets
-   `GROKBOT_DATA_DIR`, and waits for `/api/health`. A panel loads
-   `http://127.0.0.1:<port>`. Studio's sources stay on disk where the user
-   already has them. They are not copied into this repo.
+1. **Dev supervision, no bundling.** The cmux app starts one trusted Studio
+   checkout with plain Node. The default runtime is `next build`, then
+   `next start` (`apps/web/package.json:6-8`). `next dev` is a separate
+   developer switch. The supervisor sets `GROKBOT_DATA_DIR` and waits for an
+   authenticated ready response, not for an open `/api/health`. A panel loads
+   `http://127.0.0.1:<port>` only after that. Studio's sources stay on disk
+   where the user already has them. They are not copied into this repo.
+   The concrete work items, including the auth choice that is still open,
+   are in [stage-1-plan.md](stage-1-plan.md). The earlier "cmux-only, no
+   token" wording of this stage is withdrawn.
 2. **Ship the server inside the app only after a license grant.** Replace
    Electron's `utilityProcess` with a plain Node child running Next's
    standalone `server.js` directly. Drop `apps/desktop`. Bundle a Node
@@ -100,8 +105,10 @@ collections include `projects`, `teams`, `workflows`, `workflowRuns`,
 `agents`, and `sessions` (`packages/core/src/entities/index.ts`). Slice
 collections such as `tasks` (`packages/projects/src/slices/tasks/entities.ts`)
 and `worktrees` use the same table. `better-sqlite3` is not a dependency.
-`pnpm-workspace.yaml` sets `allowBuilds.better-sqlite3` to false. The
-native addon is `@libsql/client`.
+`pnpm-workspace.yaml` sets `allowBuilds.better-sqlite3` to false.
+`@libsql/client` is the JavaScript client imported by
+`packages/db/src/index.ts`. The native package the standalone trace names
+is `@libsql/darwin-arm64` (`apps/web/next.config.ts:27-33`).
 
 A second Swift SQLite file would be a second authority for the same
 projects, tasks, and runs. This audit did not find a reason that makes
@@ -154,70 +161,84 @@ An `approval` step pauses the workflow in `waiting-approval` until
 `approve(runId, stepId)` (`control.ts`). That is a harness gate between
 steps. It does not reach into a running CLI and cancel a tool.
 
-Agent tool approvals are a different gate, and Studio says they cannot be
-answered during workflows, routines, or team runs. `PendingApprovals` in
-`packages/orchestrator/src/agents.ts` stops the turn and does not run the
-tool. The message tells the user to run the task from chat. The Claude
-CLI harness passes `--permission-prompts none`
-(`packages/harness-coding/src/claude/cli.ts`) because a background run
-cannot answer a prompt. Codex passes `--config approval_policy=...`
-(`codex/cli.ts`). Chat is where a person can approve a tool. A workflow
-step cannot.
+Agent tool approvals are a different gate. Orchestrator workflows, routines,
+and the orchestrator team runner cannot answer them. `runAgentPrompt`
+(`packages/orchestrator/src/agents.ts:136-143`) and
+`packages/orchestrator/src/teams/context.ts:141-168` use `PendingApprovals`
+and do not run the tool. The Claude CLI harness passes
+`--permission-prompts none` (`packages/harness-coding/src/claude/cli.ts`)
+because a background run cannot answer a prompt. Codex passes
+`--config approval_policy=...` (`codex/cli.ts`). A workflow step cannot
+stop a tool that has already started.
+
+Chat and room team turns can. `captureMemberApprovals`
+(`packages/engine/src/turn.ts:399-439`) keeps one member's pending call and
+records the others as denied. `rooms.test.ts:286-305` continues that member
+after `approvals.respond`.
 
 ## Transport, supervision, events
 
-Stage 1 uses the server Studio already binds: loopback HTTP. The desktop
-token (`x-grokbot-desktop`) is installed only through the utility-process
-handshake (`server-host.ts`, `apps/web/lib/server/request-guard.ts`). A
-`next dev` process does not install it. Loopback origin checks still
-apply. The WKWebView should be allowed to navigate only to that origin.
-Do not point it at the cmux control socket, and do not open
-`SocketControlMode` past `cmuxOnly` to make this work.
+Stage 1 uses the server Studio already binds: loopback HTTP. That server
+currently allows every request when no desktop token is installed
+(`desktopTokenProblem`, `apps/web/lib/server/request-guard.ts:86-87`).
+Loopback origin checks do not replace a capability. The WKWebView navigates
+only to the supervisor's exact origin. Do not point it at the cmux control
+socket, and do not open `SocketControlMode` past `cmuxOnly` to make this
+work.
 
-When a shipped build needs the desktop token, install it without
-`parentPort`. That is a small Studio-side change, not part of this audit's
-code.
+How the capability is installed is an open user choice, compared in
+[stage-1-plan.md](stage-1-plan.md#open-decision-how-the-capability-is-checked).
+The recommendation is a small Studio change: call `installDesktopToken`
+before listen, from a pipe rather than `process.env` or
+`process.parentPort`, and accept the value as an HttpOnly cookie. An
+authenticated proxy that leaves Studio's TCP port open does not deny a
+second local process. Electron's `installSession`
+(`apps/desktop/src/main/session.ts:16-24`) is the behavior to match, not a
+header on the first navigation.
 
-Restart policy to copy: the delays in `restart.ts`. On restart, Studio
-already fails queued and running workflow runs that this process is not
-executing, and it leaves approval pauses alone
+Restart policy to copy: `restartDelay` in `restart.ts` (1s, 5s, 15s, then
+stop). On restart, Studio already fails queued and running workflow runs
+that this process is not executing, and it leaves approval pauses alone
 (`WorkflowRunnerService.recoverInterrupted`). The bridge should not invent
-a second recovery.
+a second recovery. The supervisor also drains logs, kills the process
+group, and shares one data-directory lock with Studio Desktop. Those items
+are S5 in the stage 1 plan.
 
-cmux `seq` / `boot_id` stay the authority for cmux events
-(`CmuxEventBus.swift:258-263`). Studio has its own bus (`workflow.run`,
-`workflow.step`, `workflow.event` in `runner.ts`). Mapping those into
-cmux events is stage-1 bridge work. The child does not assign `seq`.
+cmux `seq` is durable (`CmuxEventSequenceStore`). `boot_id` is this cmux
+process (`CmuxEventBus.swift:281`). Studio has its own bus. The live HTTP
+stream is `GET /api/events`, and `eventResponse` does not replay
+(`apps/web/features/events/stream.ts:26-27`). The bridge refreshes Studio
+state on connect, then may publish into cmux under cmux's allocator. The
+child does not assign `seq`. A header named `workflow.run` is not that
+transport.
 
 Startup: the desktop host allows 60 s (`HEALTH_TIMEOUT_MS`). This audit
-did not measure a cold `next dev`. The panel should show a starting state
-until `/api/health` succeeds.
+did not measure a cold `next build` or `next start`. The panel shows a
+native starting shell until an authenticated ready response, and it does
+not treat `body.app == "grokbot"` as identity. `/api/health` also returns
+`onboarded` (`apps/web/app/api/health/route.ts:10-13`) and is token-exempt.
 
 ## License and GPL bundling
 
+This section is a reading of the files, not a legal conclusion.
+
 No `LICENSE` file exists anywhere in the archive. No `package.json` in the
 root or in any workspace package has a `license` field. The only
-"copyright" string is a sentence in a seeded persona
-(`packages/concierge/src/seed/agents.ts`), not a grant. Treat Studio as
-all rights reserved, owned by the user, until the user says otherwise.
+"copyright" string found is a sentence in a seeded persona
+(`packages/concierge/src/seed/agents.ts`), not a grant. The files do not
+show a license, and they do not show that the user owns every contribution
+in the tree.
 
-cmux's app and CLI are GPL-3.0-or-later. This is an engineering
-constraint, not a legal opinion.
+cmux's app and CLI are GPL-3.0-or-later. The GPL on those files is not
+something this fork can drop.
 
-The user is the copyright holder of Studio, so they are the person who can
-grant a license for it. They cannot drop the GPL from cmux. If a cmux
-build ships Studio inside the app bundle and launches it as the app's
-backend, that distribution is one combined program. Recipients of a GPL
-binary are entitled to the corresponding source of the GPL work, and the
-Studio copyright holder has to license the Studio bits they ship under
-GPL-3.0-or-later, or under another license that GPL-3.0 can combine with,
-for that distribution. The user can make that grant. The archive does not
-make it.
-
-Until that grant exists, do not copy Studio into this repository and do
-not place it in the `.app`. Stage 1 avoids that: it runs the checkout the
-user already has. Stage 2 is the point at which the grant has to exist.
-Do not copy Studio into any BUSL path.
+Whether shipping Studio inside a cmux bundle forms one combined work, and
+what a grant would have to say, is for the user and counsel. This audit
+does not decide it. Until the user decides, do not copy Studio into this
+repository and do not place it in the `.app`. Stage 1 runs a checkout the
+user already has. Stage 2 is the point at which ownership, a written grant,
+dependency and native-binary notices, and corresponding source have to be
+settled. Do not copy Studio into any BUSL path.
 
 ## Comparison
 
@@ -226,8 +247,8 @@ Do not copy Studio into any BUSL path.
 | Project database | A new file. Splits authority with `grokbot.db` | Studio's libSQL file | Same as B |
 | React UI | Would still have to host Studio or rewrite it. Rewrite is rejected | WKWebView at the server origin | Same as B |
 | Electron | None | Must be removed from the launch path | Stage 1 never starts it. Stage 2 deletes the dependency |
-| Plain Node | Not used | `next dev` / `next start` / standalone `server.js` work. `server-host.ts` does not | Stage 1 uses `next dev` or `next start`. Stage 2 uses `server.js` under plain Node |
-| GPL | New Swift in this repo is already GPL | Bundling needs the user's grant | Stage 1 does not distribute Studio. Stage 2 needs the grant |
+| Plain Node | Not used | `next dev`, `next start` after `next build`, and standalone `server.js` are separate commands. `server-host.ts` does not import Electron | Stage 1 default is `next build` then `next start`. `next dev` is a developer switch. Stage 2 uses `server.js` under plain Node. `next build` and `next start` were not run in this audit |
+| GPL | New Swift in this repo is already GPL | The files contain no grant. Whether a bundle is a combined work is for the user and counsel | Stage 1 does not distribute Studio. Stage 2 waits on that decision |
 | Node in the bundle | No | Yes, at ship time | Stage 2 only |
 | Startup | No Node process | Next.js listen. Health budget in the desktop host is 60 s. Untimed here | Same |
 
@@ -235,6 +256,7 @@ Do not copy Studio into any BUSL path.
 
 1. Stage 1 may supervise the user's Studio checkout. No second database.
    No Electron window. No Studio sources in the cmux tree.
-2. Stage 2 waits on an explicit license grant before any Studio bits are
-   placed in the app bundle.
+2. Stage 2 waits on the user and counsel before any Studio bits are placed
+   in the app bundle. The archive is not a grant, and it is not evidence
+   that the user owns every contribution.
 3. Option A is not the path unless the user refuses a Node child.

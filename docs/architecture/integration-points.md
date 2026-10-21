@@ -96,12 +96,18 @@ stream events; and push Feed items. Those methods are split across
 `cmux capabilities` prints `system.capabilities`. `events.stream` is
 implemented and omitted from that list.
 
-The event stream is the right catch-up mechanism: monotonic `seq`, `boot_id`,
-in-memory replay of 4,096 events, `resume.gap` when the cursor is stale,
-16 KiB frame cap, 1,024-event subscriber queue, `slow_consumer` close, and
+The event stream is the right catch-up mechanism for cmux's own events:
+monotonic `seq`, `boot_id`, in-memory replay of 4,096 events, 16 KiB frame
+cap, 1,024-event subscriber queue, `slow_consumer` close, and
 `~/.cmuxterm/events.jsonl` rotated at 16 MiB (`CmuxEventBus.swift:258-263`
-and `705-708`). After a gap, the client refreshes with snapshot methods.
-The disk log is not the source of truth across a long outage.
+and `705-708`). `boot_id` is process-local (`:281`). `seq` is allocated
+from `CmuxEventSequenceStore` (`CmuxEventSequenceStore.swift:4-8`, `42-57`)
+and survives a restart. `resume.gap` is set when restore is in progress,
+when the cursor is outside the retained window, or when the log has
+unreadable records (`CmuxEventBus.swift:499`, `527-554`), not because the
+process restarted. After a gap, the client refreshes with snapshot methods.
+Studio's own stream is a separate transport; see
+[stage-1-plan.md](stage-1-plan.md).
 
 Remote `cmux ssh` relays stay default-deny
 (`RemoteRelayCommandPolicy.swift:81-88`). A project service must not assume
@@ -242,13 +248,21 @@ Studio's gates, read at archive `35a0d1af631a53958883e61c1b98ab072195b11c`,
 match this split. An `approval` step
 (`packages/orchestrator/src/workflows/steps/control.ts`) pauses the run in
 `waiting-approval` until `approve(runId, stepId)`. That cannot stop a tool
-the agent has already started. Inside workflows, routines, and team runs,
-Studio does not even ask: `PendingApprovals` in
-`packages/orchestrator/src/agents.ts` ends the turn and leaves the tool
-unrun, and the Claude CLI harness is started with `--permission-prompts none`
-(`packages/harness-coding/src/claude/cli.ts`). Chat is the place a person
-approves a tool. Codex's CLI gets an `approval_policy` setting
-(`codex/cli.ts`); that is the provider's own policy, not the workflow step.
+the agent has already started.
+
+Orchestrator background work does not ask either. `runAgentPrompt`
+(`packages/orchestrator/src/agents.ts:136-143`) and the orchestrator team
+runner (`packages/orchestrator/src/teams/context.ts:141-168`) use
+`PendingApprovals` and `approvalBlockedMessage`, and the tools never run.
+The Claude CLI harness is started with `--permission-prompts none`
+(`packages/harness-coding/src/claude/cli.ts`).
+
+Chat and room team turns are a separate path. `captureMemberApprovals`
+(`packages/engine/src/turn.ts:399-439`) keeps one member's pending tool call
+and records the other members' calls as denied. `rooms.test.ts:286-305`
+continues that member after `approvals.respond`. Codex's CLI gets an
+`approval_policy` setting (`codex/cli.ts`); that is the provider's own
+policy, not the workflow step.
 
 ## Companion-app boundary
 

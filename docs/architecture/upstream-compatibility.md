@@ -81,15 +81,18 @@ Grant none, Change Date four years from publication, Change License
 GPL-3.0-or-later. Production use, including self-hosting, needs a commercial
 license from Manaflow. This audit did not copy or build them.
 
-Not named in the root BUSL list, and not given a clean license of their own:
+Not named in the root BUSL list. Reading `LICENSE:21-22`: the macOS app,
+iOS app, CLI, cmux-tui, and all other directories remain under the license
+this file or their own notices state. That is a reading of the file, not a
+legal conclusion.
 
 - `workers/cmux-paste-text/` — one Objective-C file, no `LICENSE`, no header.
-  It is a macOS paste helper, not one of the server directories. The root
-  license would cover it only because it is not carved out. Treat that as
-  GPL-by-default and do not move it.
-- `workers/fleet-artifacts/` — no `license` field in `package.json`, no
-  `LICENSE` file, not listed in root `LICENSE`. Status is unverified. Do not
-  import it, and do not assume it is GPL.
+  It is a macOS paste helper, not one of the six BUSL directories. The root
+  text is the notice that applies. Do not move it.
+- `workers/fleet-artifacts/` — no `LICENSE` file and no `license` field in
+  `package.json`. It is also outside the six BUSL directories, so the same
+  root sentence is the notice that applies. Do not vendor it, and do not
+  copy its signing protocol.
 
 `THIRD_PARTY_LICENSES.md` records MIT, BSD, and Apache notices for bundled
 libraries. Ghostty and bonsplit are MIT at the pins above. Those notices

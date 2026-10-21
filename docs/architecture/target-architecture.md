@@ -10,7 +10,9 @@ The orchestration recommendation is a staged hybrid that ends at Studio's
 Next.js server and its libSQL file. It is not approved. See
 [adr-0001-orchestration-backend.md](adr-0001-orchestration-backend.md).
 The plan that follows approval is
-[phase-1-plan-revised.md](phase-1-plan-revised.md). It is a plan only.
+[stage-1-plan.md](stage-1-plan.md). It is a plan only. Stage 1 as first
+written is withdrawn; the review is
+[review-response-codex-1.md](review-response-codex-1.md).
 
 ## Decision
 
@@ -24,12 +26,15 @@ libSQL `documents` table (`packages/db/src/index.ts`), default
 are collections in that file. Reusing it is practical. A new Swift SQLite
 file is not the recommendation.
 
-Stage 1 supervises the user's existing checkout and does not copy it into
-this repo. Stage 2, shipping the server inside the app, waits on a license
-grant. The archive has no `LICENSE` and no `package.json` `license` field.
-Until the user grants one, Studio is all rights reserved and stays out of
-the bundle. The user, as copyright holder, is who can make that grant.
-cmux stays GPL-3.0-or-later.
+Stage 1 supervises one trusted checkout and does not copy it into this
+repo. The archive has no `LICENSE` and no `package.json` `license` field.
+That is a reading of the files: there is no grant in the tree, and there
+is no evidence here that the user owns every contribution. Whether a later
+bundle is a combined work is for the user and counsel. Until that decision,
+Studio stays out of the bundle. cmux stays GPL-3.0-or-later. The auth
+choice inside stage 1 is still open; the recommendation is a minimal
+Studio token change, recorded in
+[stage-1-plan.md](stage-1-plan.md#open-decision-how-the-capability-is-checked).
 
 What still holds:
 
@@ -43,8 +48,9 @@ What still holds:
   [react-panel-hosting.md](react-panel-hosting.md): a dedicated `WKWebView`
   loads the loopback Next origin. `BrowserPanel`, `loadFileURL`, and
   `afstudio-shell://` are the wrong loaders for the product UI.
-- Native edits, once a backend is chosen, are the five boundaries in the
-  revised Phase 1 plan.
+- Native edits, once this proposal is approved, are the boundaries in
+  [stage-1-plan.md](stage-1-plan.md#native-boundaries-corrected). Secure
+  stage 1 also changes Studio, or it cannot deny a second local process.
 
 ## Why a socket-only companion is the wrong UI shape
 
@@ -73,11 +79,9 @@ The plan's Phase 2 gate is a project panel beside a terminal, without a
 second window manager. That gate is an in-process panel. A companion window
 is a second window manager.
 
-A separate window is still a second window manager. A supervised Studio
-process with no window of its own is a different proposal (ADR 0001, option
-B). It is not selected. Section 45 of the original plan said not to add a
-service until the audit showed the need. This addendum asks the audit to
-consider Studio's backend specifically. The audit could not read it.
+A supervised Studio process with no window of its own is the option B
+recommendation in ADR 0001. It is still awaiting approval. The Studio
+archive was read at `35a0d1af631a53958883e61c1b98ab072195b11c`.
 
 ## Why not "all of it in Workspace.swift"
 
@@ -86,11 +90,12 @@ days. `CLI/cmux.swift` had 221 and `TerminalController.swift` had 128.
 Project rules in those files would conflict continuously and could not be
 tested without the app.
 
-The panel adapter is the edit those hot files get: one `PanelType` case,
-one view branch, one creation method that calls out. Workflow transitions
-stay in the package the ADR selects. The five native boundaries and their
-sizes are in
-[phase-1-plan-revised.md](phase-1-plan-revised.md#after-a-decision-the-only-cmux-edits).
+The panel adapter is the edit those hot files get: one `PanelType` case
+(no special decoder arm; `Self(rawValue:)` already accepts a new case),
+one view branch, the workspace encode and restore switches, both dock
+switches, and one creation method that calls out. Workflow transitions
+stay in Studio. The boundaries and their sizes are in
+[stage-1-plan.md](stage-1-plan.md#native-boundaries-corrected).
 
 ## Persistence
 
@@ -197,8 +202,9 @@ infrastructure. Take the workflow ideas. Leave the emulator alone.
 - No automatic execution on project restore.
 - No second Feed.
 - No allowlist expansion for remote relay spawn.
-- GPL notices stay. New files in this repo are GPL-3.0-or-later. Studio's
-  license was not read; do not vendor Studio into this tree until it is.
+- GPL notices stay. New files in this repo are GPL-3.0-or-later. The
+  Studio archive was read: no `LICENSE` file and no `license` field. Do
+  not vendor Studio into this tree.
 
 ## Risks
 
@@ -208,14 +214,14 @@ infrastructure. Take the workflow ideas. Leave the emulator alone.
 | Closed pane switch | Every new panel is a cross-file compile break if one site is missed |
 | Provider gaps | Most installed agents do not block an in-flight tool. A workflow gate does not fill that gap |
 | Codex | Hook path is telemetry. Teams path is a different mechanism and not fully re-verified |
-| Studio license | No LICENSE file and no package.json license field. All rights reserved until the user grants otherwise. Stage 2 cannot bundle it before that grant |
+| Studio license | No LICENSE file and no package.json license field. The files do not show that the user owns every contribution. Stage 2 waits on the user and counsel |
 | Second database | Not recommended. Studio's libSQL file already stores projects, workflows, teams, tasks, and worktrees |
 | Session safety | Stuffing resume commands into the new database would bypass `SessionSnapshotImportTrust` |
 | `events.stream` discovery | Implemented, omitted from `system.capabilities` |
 | Socket default | A companion design that forgets `cmuxOnly` works in development and fails for users |
 | Linux CI cannot build the app | macOS `xcodebuild` is still unrun. Phase 1's first Mac run is the real compile gate |
 | License | BUSL trees and AGPL Tellurion are easy to paste. Both are out of bounds |
-| `workers/fleet-artifacts` | License file missing. Do not vendor it while that is unresolved |
+| `workers/fleet-artifacts` | No LICENSE file in the directory. Root `LICENSE:21-22` is the notice that applies. Do not vendor it |
 | Name collision | `CMUXProjectModel` and `PanelType.project` already exist for the Xcode pane |
 
 ## What approval needs to say
@@ -226,9 +232,9 @@ Approval has to name these:
    database. No Electron window. No Studio sources in this repo.
 2. The React UI is a `WKWebView` on that server's loopback origin. It is
    not rewritten in SwiftUI, and it is not a `BrowserPanel`.
-3. Stage 2, bundling Studio, waits on the user granting a GPL-compatible
-   license for that distribution. They are the copyright holder. The
-   archive does not contain that grant.
+3. Stage 2, bundling Studio, waits on the user and counsel. The archive
+   does not contain a grant, and it does not establish ownership of every
+   contribution. Whether a bundle is a combined work is their decision.
 4. Workflow-level gates are allowed for providers that cannot block an
    in-flight tool, with that limitation visible on the capability matrix.
    Studio's own `approval` step is that kind of gate. Codex hook mode in

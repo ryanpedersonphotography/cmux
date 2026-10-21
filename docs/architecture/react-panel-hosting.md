@@ -75,10 +75,16 @@ files out of the desktop renderer directory. cmux should draw boot and
 crash states itself and load the Next origin for every product view.
 
 A dedicated data store for this panel type should not be the browser
-profile. It does not have to be non-persistent: stage 1 has no login
-cookie. If a later build installs the desktop token, the web view must
-send `x-grokbot-desktop` (`apps/web/lib/server/request-guard.ts`). Stage 1
-does not install that token, which matches `pnpm dev`.
+profile and should not be `WKWebsiteDataStore.default()`. Stage 1 installs
+a per-launch capability. The web view receives it as an HttpOnly cookie
+written into that store before `load`, which is how navigation, `fetch`,
+`EventSource`, and server actions present it. A non-persistent store keeps
+the cookie off disk. Electron's `installSession`
+(`apps/desktop/src/main/session.ts:16-24`) adds `x-grokbot-desktop` on
+every request; WKWebView has no equivalent header hook, so a header on the
+first `URLRequest` is not the design. The choice between a Studio cookie
+check and a native proxy is open in
+[stage-1-plan.md](stage-1-plan.md#open-decision-how-the-capability-is-checked).
 
 ## What already exists
 
@@ -142,10 +148,11 @@ returns `nil` from `createWebViewWith`. Links that should leave the panel
 go through the same external-link handoff the agent session uses, or they
 are ignored.
 
-Stage 1 does not install Studio's desktop token. The page is the loopback
-origin, which is the check `pnpm dev` already uses. A later shipped build
-that installs `x-grokbot-desktop` must send it on requests and must not
-put it in a URL the event log or the back-forward list would retain.
+The capability must not appear in a URL the event log or the back-forward
+list would retain. Loopback origin checks
+(`apps/web/lib/server/request-guard.ts:215-243`) still apply, and they do
+not replace the capability: with no token installed,
+`desktopTokenProblem` allows the request (`:86-87`).
 
 ## Native and JS messages
 
@@ -219,9 +226,7 @@ does not by itself give each view a process.
 
 ## Registration cost
 
-The native edits are the panel-registration row in
-[phase-1-plan-revised.md](phase-1-plan-revised.md#native-integration-boundaries).
-The React bundle, if it is Studio's, stays outside those files. `webviews/`
-is the existing Vite tree for agent-session and diff; adding Studio's app
-there is a product choice for after Studio is readable, not a change made
-in this audit.
+The native edits are the boundaries in
+[stage-1-plan.md](stage-1-plan.md#native-boundaries-corrected). Studio's
+Next UI stays in Studio. `webviews/` is the existing Vite tree for
+agent-session and diff; stage 1 does not mount the product UI there.
