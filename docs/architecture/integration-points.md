@@ -64,13 +64,17 @@ Reasons from code:
   special case with its own allowlist, and socket `browser.open` of that URL
   fails when the browser is disabled (`Sources/TerminalController.swift`).
 
-**What to reuse instead:**
+**What to reuse instead:** the dedicated-panel host in
+[react-panel-hosting.md](react-panel-hosting.md). Short form:
 
-- The `webviews/` Vite bundle and the committed output under
-  `Resources/markdown-viewer/webviews-app`, if a panel needs React.
-- The load pattern in `AgentSessionWebRendererCoordinator`: `loadFileURL`
-  of a bundle file, one script-message handler, cancel any other navigation.
 - A new `PanelType`, not `browser`.
+- `loadFileURL` (or the diff viewer's custom scheme, or a single localhost
+  origin if a backend audit later shows one), one script-message handler,
+  cancel any other main-frame navigation.
+- `webViewWebContentProcessDidTerminate` with a bounded reload, which
+  `MarkdownWebRenderer` has and `AgentSessionWebRendererCoordinator` does not.
+- A non-persistent or dedicated data store. The agent-session web view does
+  not set one.
 
 `webviews/src/main.tsx` only mounts `agent-session` or `diff`. Adding a
 third page there is a frontend change plus a new native host. It is not a
@@ -105,8 +109,8 @@ Remote `cmux ssh` relays stay default-deny
 those methods work on a remote host.
 
 This is enough to orchestrate terminals from outside the process. It is not
-enough to put a Kanban view in a pane. See
-[target-architecture.md](target-architecture.md).
+enough to put a Kanban view in a pane. The backend choice is withheld in
+[adr-0001-orchestration-backend.md](adr-0001-orchestration-backend.md).
 
 ## Hook installation
 
@@ -196,11 +200,54 @@ The classifier then refuses to block. That is the disagreement that matters
 for a workflow gate: those providers cannot stop a tool for a human inside
 Feed today.
 
+## Approval model
+
+Two different gates share the word "approval." They stop different things.
+
+**Provider-native approval.** The agent process asks before it acts, and it
+blocks on a real hook until cmux replies or the hook times out. The waiter
+is `FeedCoordinator.isBlockingDecisionEvent`
+(`Sources/Feed/FeedCoordinator.swift:703-709`) plus
+`FeedWaiterRegistry`. Only some providers reach that waiter. A provider
+without a blocking hook keeps running. Sending a notification, or recording
+`toolStart`, is not this gate.
+
+**Workflow-level approval.** The harness refuses to start the next step
+until a person approves. The running agent is outside that refusal.
+Workflow-level approval cannot stop an already-running agent from doing
+something unauthorized. If the provider has no blocking hook, the tool call
+that is already inside the agent finishes on the agent's own rules.
+
+A policy check has to expose both facts per provider. A step that needs an
+in-flight block declares that requirement. The scheduler may start that step
+only on a provider whose row below says the in-flight tool can be blocked.
+On every other provider the step is a workflow gate only, and the UI says so
+before the step starts. Hiding the distinction is how a recipe claims a
+human stopped a tool that had already run.
+
+| Provider | Can block an in-flight tool | What a workflow gate adds |
+| --- | --- | --- |
+| Claude Code | Yes. Feed waits on PermissionRequest, ExitPlanMode, and AskUserQuestion | Can also hold the next workflow step |
+| Gemini | Yes, for side-effecting PreToolUse classified as approval-capable | Can also hold the next step |
+| Kiro | Yes, for side-effecting `preToolUse`, and only for the `cmux` Kiro agent | Can also hold the next step |
+| OpenCode | Yes. The plugin calls `feed.push` and waits | Can also hold the next step |
+| Cursor CLI | Not Feed. A native prompt is requested only when the hook's `sandbox` value is false and the local allowlist checks pass (`AgentHookNotificationPolicy.swift:336-342`) | Does not stop a sandboxed shell, and does not stop a command that has already started |
+| Codex (hook mode) | No. PermissionRequest is `nativeApprovalPrompt`; PreToolUse is `toolStart` | Workflow gate only |
+| Codex Teams | Unverified as an in-flight block. `CodexTeamsApprovalBridge.swift` exists; the reply path was not re-executed | Do not treat the workflow gate as a substitute for that bridge |
+| Hermes | The Feed classifier does not wait. Approval is the `notification` / `approval-response` subcommands in the catalog | A workflow gate is a third mechanism, not those subcommands |
+| Grok, Copilot, CodeBuddy, Factory, Qoder, Kimi | No. Events are telemetry after classification | Workflow gate only |
+| Pi, OMP, Campfire, Amp, Antigravity, Rovo Dev, Muse | No Feed decision in the classifier | Workflow gate only |
+
+Studio's own approval gates were not read. If they exist, they still have
+to be classified as one of these two, per provider, before a workflow treats
+them as a stop.
+
 ## Companion-app boundary
 
 A separate app can own project records and call the socket for terminals,
 focus, events, and Feed *if* the user turns socket admission on. It cannot
 register a pane, read the full terminal emulator, or approve Chief cards in
-a release build. Phase 2 of the plan requires a project panel beside a
-terminal. That requirement is in-process. The recommendation is in
+a release build. A project panel beside a terminal is in-process. Which
+process owns the project store is withheld; see
+[adr-0001-orchestration-backend.md](adr-0001-orchestration-backend.md) and
 [target-architecture.md](target-architecture.md).

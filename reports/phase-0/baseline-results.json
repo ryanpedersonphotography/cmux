@@ -34,7 +34,7 @@
   "implementationCommit": "8926363815581a6b86d4ff2b012fe5a23ef05a66",
   "implementationCommitNote": "SHA of the commit that added the Phase 0 documents. A later commit only records this value in the JSON.",
   "architectureDecisions": [
-    "Proposal only, awaiting approval: in-process Swift domain package, new SQLite file, SwiftUI panel, no companion daemon, no BrowserPanel for new React UI."
+    "Withheld: ADR 0001 does not select an in-process Swift SQLite package or Studio's backend. Studio was not readable. A second project database is not the default. React hosting is a conditional go for a dedicated WKWebView panel and a no-go for BrowserPanel. Phase 1 is a plan only."
   ],
   "knownLimitations": [
     "macOS app build and unit tests were not run.",
@@ -42,7 +42,10 @@
     "Swift packages were not type-checked; swiftc is absent.",
     "config-schema and feature-flags checks were skipped because they read BUSL paths under web/.",
     "BUSL server trees were not built.",
-    "Codex Teams Feed reply path was identified but not executed."
+    "Codex Teams Feed reply path was identified but not executed.",
+    "agentflow-studio was not cloned. Requested SHA 35a0d1af631a53958883e61c1b98ab072195b11c was not verified.",
+    "pnpm install, Studio typecheck, and Studio tests were not run.",
+    "No GitHub Actions workflow was added or dispatched."
   ],
   "checks": [
     {
@@ -50,140 +53,214 @@
       "status": "passed",
       "command": "python3 scripts/verify-local.py --help",
       "exitCode": 0,
-      "summary": "Printed usage. Default entry point is python3 scripts/verify-local.py."
+      "summary": "Printed usage. Default entry point is python3 scripts/verify-local.py.",
+      "gate": "linux"
     },
     {
       "id": "verify-local-list",
       "status": "passed",
       "command": "python3 scripts/verify-local.py --all --list",
       "exitCode": 0,
-      "summary": "Listed 16 static checks plus optional swift-syntax. Did not execute them."
+      "summary": "Listed 16 static checks plus optional swift-syntax. Did not execute them.",
+      "gate": "linux"
     },
     {
       "id": "verify-local-selected",
       "status": "passed",
       "command": "python3 scripts/verify-local.py --jobs 4 --timeout 120 --only xcstrings --only localization --only localization-defaults --only project-tests --only project --only test-wiring-sync --only wire-app-sources --only ui-lab --only ui-fuzzer --only launch-policy --only test-wiring --only package-groups --only remote-tmux-waits-tests --only remote-tmux-waits",
       "exitCode": 0,
-      "summary": "14/14 selected checks passed. Native compilation, app tests, and app launch were not checked. Durations and nested tests: xcstrings 0.62s; localization 2.38s; localization-defaults 2.73s; project-tests 1.68s (15 tests, 1 skipped); project 0.82s; test-wiring-sync 1.63s (18 tests); wire-app-sources 0.07s (13 tests); ui-lab 0.06s (4 tests); ui-fuzzer 0.17s (22 tests); launch-policy 0.03s; test-wiring 2.13s; package-groups 0.04s; remote-tmux-waits-tests 0.52s; remote-tmux-waits 0.12s."
+      "summary": "14/14 selected checks passed. Native compilation, app tests, and app launch were not checked. Durations and nested tests: xcstrings 0.62s; localization 2.38s; localization-defaults 2.73s; project-tests 1.68s (15 tests, 1 skipped); project 0.82s; test-wiring-sync 1.63s (18 tests); wire-app-sources 0.07s (13 tests); ui-lab 0.06s (4 tests); ui-fuzzer 0.17s (22 tests); launch-policy 0.03s; test-wiring 2.13s; package-groups 0.04s; remote-tmux-waits-tests 0.52s; remote-tmux-waits 0.12s.",
+      "gate": "linux"
     },
     {
       "id": "config-schema",
       "status": "not_run",
       "command": "python3 scripts/generate-cmux-config-schema.py --check",
       "exitCode": null,
-      "reason": "Reads web/data/cmux.schema.json, which is under the BUSL tree. Not run."
+      "reason": "Reads web/data/cmux.schema.json, which is under the BUSL tree. Not run.",
+      "gate": "linux",
+      "gateNote": "Linux-runnable. Not run because it reads the BUSL tree under web/."
     },
     {
       "id": "feature-flags",
       "status": "not_run",
       "command": "python3 scripts/lint-feature-flags.py",
       "exitCode": null,
-      "reason": "Reads web/app/lib/feature-flags.ts, which is under the BUSL tree. Not run."
+      "reason": "Reads web/app/lib/feature-flags.ts, which is under the BUSL tree. Not run.",
+      "gate": "linux",
+      "gateNote": "Linux-runnable. Not run because it reads the BUSL tree under web/."
     },
     {
       "id": "swift-syntax",
       "status": "not_run",
       "command": "python3 scripts/verify-local.py --swift-changed origin/main",
       "exitCode": null,
-      "reason": "swiftc is not installed. verify-local marks swift-syntax unsupported without it."
+      "reason": "swiftc is not installed. verify-local marks swift-syntax unsupported without it.",
+      "gate": "linux",
+      "gateNote": "The Python driver runs on Linux. It executes only when swiftc is installed. swiftc is not xcodebuild. Absent here."
     },
     {
       "id": "git-diff-check",
       "status": "passed",
       "command": "git diff --check",
       "exitCode": 0,
-      "summary": "No whitespace errors on the audited tree before docs were added."
+      "summary": "No whitespace errors on the audited tree before docs were added.",
+      "gate": "linux"
     },
     {
       "id": "ghostty-zig-version-script",
       "status": "failed_preexisting_environment",
       "command": "bash scripts/ghostty-zig-version.sh",
       "exitCode": 1,
-      "summary": "error: Ghostty Zig manifest not found: /workspace/ghostty/build.zig.zon. Submodule is not initialized. This is the expected result in this checkout, not a product failure."
+      "summary": "error: Ghostty Zig manifest not found: /workspace/ghostty/build.zig.zon. Submodule is not initialized. This is the expected result in this checkout, not a product failure.",
+      "gate": "linux"
     },
     {
       "id": "ghostty-pin-zig-manifest",
       "status": "passed",
       "command": "curl -fsSL https://raw.githubusercontent.com/manaflow-ai/ghostty/ef4f1570d62117ebc51e3b0f07ad4f34032267b6/build.zig.zon",
       "exitCode": 0,
-      "summary": "Pinned manifest says .minimum_zig_version = \"0.16.0\" and .version = \"1.3.2-dev\"."
+      "summary": "Pinned manifest says .minimum_zig_version = \"0.16.0\" and .version = \"1.3.2-dev\".",
+      "gate": "linux"
     },
     {
       "id": "swift-test-packages",
       "status": "not_run",
       "command": "swift test --package-path Packages/macOS/CmuxControlSocket",
       "exitCode": null,
-      "reason": "swift is not installed. Package tests were not faked. Many packages also import AppKit and cannot link on Linux."
+      "reason": "swift is not installed. Package tests were not faked. Many packages also import AppKit and cannot link on Linux.",
+      "gate": "mac_command_line_tools",
+      "gateNote": "swift test / swift build. Command Line Tools include the macOS SDK and do not include xcodebuild. AppKit packages need a Mac. Not run on this Linux host."
     },
     {
       "id": "setup",
       "status": "not_run",
       "command": "./scripts/setup.sh",
       "exitCode": null,
-      "reason": "requires macOS. Initializes submodules, Rust, and GhosttyKit. Not run here."
+      "reason": "requires macOS. Initializes submodules, Rust, and GhosttyKit. Not run here.",
+      "gate": "full_xcode",
+      "gateNote": "scripts/setup.sh exits unless xcodebuild -version succeeds. Command Line Tools are not enough."
     },
     {
       "id": "metal-toolchain",
       "status": "not_run",
       "command": "xcodebuild -downloadComponent MetalToolchain",
       "exitCode": null,
-      "reason": "requires macOS."
+      "reason": "requires macOS.",
+      "gate": "full_xcode"
     },
     {
       "id": "tagged-dev-build",
       "status": "not_run",
       "command": "CMUX_DEV_BACKEND_MODE=local ./scripts/reload.sh --tag agentflow-audit --build-only",
       "exitCode": null,
-      "reason": "requires macOS. Documented in docs/contributor-verification.md. Wrapper invokes xcodebuild -project cmux.xcodeproj -scheme cmux -configuration Debug -destination platform=macOS."
+      "reason": "requires macOS. Documented in docs/contributor-verification.md. Wrapper invokes xcodebuild -project cmux.xcodeproj -scheme cmux -configuration Debug -destination platform=macOS.",
+      "gate": "full_xcode"
     },
     {
       "id": "tagged-dev-launch",
       "status": "not_run",
       "command": "CMUX_DEV_BACKEND_MODE=local ./scripts/reload.sh --tag agentflow-audit --launch",
       "exitCode": null,
-      "reason": "requires macOS. Also needs a credentials file for a real launch. Not run."
+      "reason": "requires macOS. Also needs a credentials file for a real launch. Not run.",
+      "gate": "full_xcode"
     },
     {
       "id": "unit-test-compile",
       "status": "not_run",
       "command": "./scripts/test-unit.sh -derivedDataPath \"$PWD/.build/contributor-tests\" build-for-testing",
       "exitCode": null,
-      "reason": "requires macOS. scripts/test-unit.sh uses scheme cmux-unit, configuration Debug, destination platform=macOS."
+      "reason": "requires macOS. scripts/test-unit.sh uses scheme cmux-unit, configuration Debug, destination platform=macOS.",
+      "gate": "full_xcode"
     },
     {
       "id": "unit-tests",
       "status": "not_run",
       "command": "./scripts/test-unit.sh -derivedDataPath \"$PWD/.build/contributor-tests\" test",
       "exitCode": null,
-      "reason": "requires macOS. Default action is test on scheme cmux-unit (cmuxTests)."
+      "reason": "requires macOS. Default action is test on scheme cmux-unit (cmuxTests).",
+      "gate": "full_xcode"
     },
     {
       "id": "cli-tests",
       "status": "not_run",
       "command": "xcodebuild -project cmux.xcodeproj -scheme cmux-cli-tests -configuration Debug -destination 'platform=macOS' test",
       "exitCode": null,
-      "reason": "requires macOS. Scheme cmux-cli-tests builds cmuxCLITests."
+      "reason": "requires macOS. Scheme cmux-cli-tests builds cmuxCLITests.",
+      "gate": "full_xcode"
     },
     {
       "id": "ui-test-example",
       "status": "not_run",
       "command": "xcodebuild test -project cmux.xcodeproj -scheme cmux -configuration Debug -destination 'platform=macOS' -derivedDataPath /tmp/cmux-uitest-dd -only-testing:cmuxUITests/RemoteTmuxSizingUITests",
       "exitCode": null,
-      "reason": "requires macOS. UI tests are not the PR default lane."
+      "reason": "requires macOS. UI tests are not the PR default lane.",
+      "gate": "full_xcode"
     },
     {
       "id": "ghosttykit-build",
       "status": "not_run",
       "command": "cd ghostty && zig build -Dcrash-report-subdir=cmux/crash -Dsentry=false -Di18n=false -Demit-xcframework=true -Demit-macos-app=false -Dxcframework-target=universal -Doptimize=ReleaseFast",
       "exitCode": null,
-      "reason": "requires macOS and Zig 0.16.0. Workflow .github/workflows/build-ghosttykit.yml is workflow_dispatch. Prebuilt download is scripts/ensure-ghosttykit.sh against checksum ae38ade4e1c7e4d6ce21b8d7c16e9a95c346005848b4e2daa2afb6f56084c024 for pin ef4f1570d62117ebc51e3b0f07ad4f34032267b6."
+      "reason": "requires macOS and Zig 0.16.0. Workflow .github/workflows/build-ghosttykit.yml is workflow_dispatch. Prebuilt download is scripts/ensure-ghosttykit.sh against checksum ae38ade4e1c7e4d6ce21b8d7c16e9a95c346005848b4e2daa2afb6f56084c024 for pin ef4f1570d62117ebc51e3b0f07ad4f34032267b6.",
+      "gate": "mac_zig",
+      "gateNote": "zig build for GhosttyKit. Needs Zig 0.16.0 and a Mac. Not a Command Line Tools command and not xcodebuild."
     },
     {
       "id": "test-wiring-sync-write",
       "status": "not_run",
       "command": "./scripts/sync-test-wiring --check",
       "exitCode": null,
-      "reason": "The check form is bash tests/test_ci_pbxproj_test_wiring.sh, which passed inside verify-local as test-wiring. The write-mode sync was not run."
+      "reason": "The check form is bash tests/test_ci_pbxproj_test_wiring.sh, which passed inside verify-local as test-wiring. The write-mode sync was not run.",
+      "gate": "linux"
+    },
+    {
+      "id": "studio-clone",
+      "status": "failed",
+      "gate": "linux",
+      "command": "gh repo clone ryanpedersonphotography/agentflow-studio /tmp/audit-external/agentflow-studio -- --branch main",
+      "exitCode": 1,
+      "summary": "GraphQL: Could not resolve to a Repository with the name 'ryanpedersonphotography/agentflow-studio'."
+    },
+    {
+      "id": "studio-api",
+      "status": "failed",
+      "gate": "linux",
+      "command": "gh api repos/ryanpedersonphotography/agentflow-studio",
+      "exitCode": 1,
+      "summary": "HTTP 404 Not Found."
+    },
+    {
+      "id": "studio-ls-remote",
+      "status": "failed",
+      "gate": "linux",
+      "command": "git ls-remote https://github.com/ryanpedersonphotography/agentflow-studio.git 35a0d1af631a53958883e61c1b98ab072195b11c",
+      "exitCode": 128,
+      "summary": "remote: Repository not found."
+    },
+    {
+      "id": "studio-pnpm-install",
+      "status": "not_run",
+      "gate": "linux",
+      "command": "pnpm install",
+      "exitCode": null,
+      "reason": "No checkout. pnpm is installed (Node v22.23.3). If Studio's install needs Electron native modules, the same command may later need a Mac. That was not observed."
+    },
+    {
+      "id": "studio-typecheck",
+      "status": "not_run",
+      "gate": "linux",
+      "command": "pnpm typecheck",
+      "exitCode": null,
+      "reason": "No checkout. The script name is the conventional one and was not confirmed in a package.json."
+    },
+    {
+      "id": "studio-test",
+      "status": "not_run",
+      "gate": "linux",
+      "command": "pnpm test",
+      "exitCode": null,
+      "reason": "No checkout. The script name was not confirmed in a package.json."
     }
   ],
   "counts": {
@@ -209,5 +286,42 @@
     "./scripts/test-unit.sh -derivedDataPath \"$PWD/.build/contributor-tests\" build-for-testing",
     "./scripts/test-unit.sh -derivedDataPath \"$PWD/.build/contributor-tests\" test",
     "xcodebuild -project cmux.xcodeproj -scheme cmux-cli-tests -configuration Debug -destination 'platform=macOS' test"
-  ]
+  ],
+  "gateLegend": {
+    "linux": "Runs on Linux. No Xcode and no macOS SDK.",
+    "mac_command_line_tools": "Runs on a Mac with Command Line Tools only: swift build, swift test, node, pnpm. The tools include the macOS SDK and do not include xcodebuild.",
+    "full_xcode": "Needs full Xcode: xcodebuild, the app scheme, or UI tests.",
+    "mac_zig": "Needs a Mac and Zig. Separate from Command Line Tools and from xcodebuild."
+  },
+  "agentflowStudio": {
+    "url": "https://github.com/ryanpedersonphotography/agentflow-studio",
+    "requestedSha": "35a0d1af631a53958883e61c1b98ab072195b11c",
+    "resolvedSha": null,
+    "repoModified": false,
+    "pushed": false,
+    "claimsVerified": false,
+    "claims": [
+      "pnpm/turbo monorepo",
+      "React UI",
+      "TypeScript/Node backend",
+      "Electron packaging",
+      "workflow execution",
+      "persistence",
+      "Claude Code adapter",
+      "Codex adapter",
+      "agent teams",
+      "git worktrees",
+      "approval gates",
+      "project management",
+      "MCP integration"
+    ],
+    "note": "Every claim is unverified. The GitHub App installation for ryanpedersonphotography/cmux cannot see this private repository."
+  },
+  "addendum": {
+    "acceptedPhase0AsAuditOnly": true,
+    "implementationArchitectureApproved": false,
+    "phase1Started": false,
+    "adr": "docs/architecture/adr-0001-orchestration-backend.md",
+    "adrStatus": "withheld"
+  }
 }
