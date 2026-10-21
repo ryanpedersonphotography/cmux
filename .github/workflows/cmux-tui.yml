@@ -816,7 +816,7 @@ jobs:
 
       - name: optchat-chief test suite
         working-directory: Native/OptChat/optchat-chief
-        run: cargo test --locked
+        run: cargo test --locked --no-fail-fast
 
       - name: Home view behavior test against a real daemon
         working-directory: Native/OptChat/optchat-chief
