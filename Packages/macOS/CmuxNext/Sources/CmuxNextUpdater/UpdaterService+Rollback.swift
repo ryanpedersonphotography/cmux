@@ -116,6 +116,11 @@ extension UpdaterService {
     @discardableResult
     public func rollback(to build: String?, inputs: RollbackInputs, relaunch: (URL) -> Void) async throws -> KeptVersion {
         let target = try rollbackDecision(to: build, inputs: inputs).get()
+        // One swap at a time: a second rollback during the swap would keep the swapped-in build
+        // under the running build's name and lose the build the first one kept.
+        guard !isRollingBack else { throw RollbackRefusal.inProgress }
+        isRollingBack = true
+        defer { isRollingBack = false }
         let bundle = Bundle.main.bundleURL
         let currentBuild = identity.build
         let store = keptVersions

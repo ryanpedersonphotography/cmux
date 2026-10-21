@@ -113,11 +113,11 @@ EVERYWHERE = [
     # The CEF framework's off-main load held it ~2 s on a cold cache and hung the main thread
     # (Sentry MainThreadHang in dyld4::APIs::dlopen_from). Read the file into the cache first,
     # and say why the load is short.
-    ("dlopen (holds dyld's loader lock: main-thread dlopen/dladdr wait on it from any thread)", r"(?<![.\w])dlopen\("),
+    ("dlopen (holds dyld's loader lock: main-thread dlopen/dladdr wait on it from any thread)", r"(?:^|[^.\w]|Darwin\.)dlopen\s*\("),
     # Static code validation hashes the whole file (72 MB acpmux, the 367 MiB CEF framework):
     # seconds on a cold file cache. Never on the main thread; cache the verdict by file identity.
     ("SecStaticCodeCheckValidity (hashes the whole file; never on the main thread)",
-     r"\bSecStaticCodeCheckValidity(WithErrors)?\("),
+     r"\bSecStaticCodeCheckValidity(WithErrors)?\s*\("),
     # architecture.md 5a: no unbounded buffers. `makeStream()` without a
     # policy and the `AsyncStream { }` initializer default to unbounded.
     ("unbounded AsyncStream buffer (give it a cap and an overflow policy)",
