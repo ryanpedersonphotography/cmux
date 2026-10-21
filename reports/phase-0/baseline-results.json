@@ -31,8 +31,8 @@
       "codeCopied": false
     }
   },
-  "implementationCommit": null,
-  "implementationCommitNote": "This file cannot name the commit that adds it. The Phase 0 report and the draft PR name that SHA after git commit.",
+  "implementationCommit": "8926363815581a6b86d4ff2b012fe5a23ef05a66",
+  "implementationCommitNote": "SHA of the commit that added the Phase 0 documents. A later commit only records this value in the JSON.",
   "architectureDecisions": [
     "Proposal only, awaiting approval: in-process Swift domain package, new SQLite file, SwiftUI panel, no companion daemon, no BrowserPanel for new React UI."
   ],
