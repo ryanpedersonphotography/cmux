@@ -323,5 +323,7 @@
     "phase1Started": false,
     "adr": "docs/architecture/adr-0001-orchestration-backend.md",
     "adrStatus": "withheld"
-  }
+  },
+  "addendumCommit": "23319ce2a4b37d92f48ec5332d8e4d8b498a96cd",
+  "addendumCommitNote": "SHA of the commit that added the addendum documents. A later commit only records this value."
 }
