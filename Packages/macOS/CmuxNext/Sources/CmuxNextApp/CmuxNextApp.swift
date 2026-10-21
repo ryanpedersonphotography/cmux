@@ -43,6 +43,10 @@ public struct CmuxNextApp {
                                               terminalEnvironmentProvider: environment.terminalEnvironmentProvider(),
                                               resolvesShellIntegration: environment.resolvesShellIntegration)
         DebugTimings.markLaunch("main.prestart")
+        // The acpmux trust check hashes its 72 MB binary; answer it now, off the main thread,
+        // before AppServices resolves acpmux on the main thread (AcpmuxEnvironment.prewarmTrust).
+        AcpmuxEnvironment.prewarmTrust(build: environment.build,
+                                       bundledBinDirectory: Bundle.main.resourceURL?.appendingPathComponent("bin", isDirectory: true))
         // DEV and NIGHTLY crash at an exception's throw site (cx-r3q), before NSApp exists.
         CrashOnExceptions.register()
         // Instantiate the CEF-ready subclass before anything touches NSApp.

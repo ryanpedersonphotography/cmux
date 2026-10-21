@@ -226,7 +226,52 @@ nonisolated enum AcpmuxServerPeer {
         let path = executable.resolvingSymlinksInPath()
         guard SecStaticCodeCreateWithPath(path as CFURL, [], &code) == errSecSuccess, let code else { return false }
         let flags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate)
+        // concurrency-allow: the launcher calls it off main; main reaches it only through executableSignedByAppTeamCached on a cache miss, which AcpmuxEnvironment.prewarmTrust answers at launch off main
         return SecStaticCodeCheckValidity(code, flags, requirement) == errSecSuccess
+    }
+
+    /// ``executableSignedByAppTeam(_:team:)`` answered once per file identity: the strict check
+    /// hashes the whole binary (72 MB, about 2 s on a cold file cache after an update), and
+    /// ``AcpmuxEnvironment/resolve(build:bundledBinDirectory:environment:userHome:uid:isExecutable:launchEnvironment:)``
+    /// runs on the main thread from eight call sites (Sentry MainThreadStall 2 s+ in
+    /// `SecStaticCodeCheckValidityWithErrors` from `AppServices.modelRouter`). The verdict is
+    /// keyed by the resolved path, team, device, inode, size, mtime and ctime: a rewrite in place
+    /// changes ctime (no user call sets it), a replacement changes the inode, so a changed file
+    /// is checked again. The launch itself (`AcpmuxDaemonLauncher.launch`) still runs the
+    /// uncached check, off the main thread.
+    static func executableSignedByAppTeamCached(_ executable: URL, team: String? = ownTeam) -> Bool {
+        guard let team else { return true }
+        let path = executable.resolvingSymlinksInPath().path
+        guard let key = TrustKey(path: path, team: team) else { return false }
+        if let known = trustVerdicts.withLock({ $0[key] }) { return known }
+        let verdict = executableSignedByAppTeam(URL(fileURLWithPath: path), team: team)
+        // A file that changed during the check gets a new key next time; store under the old one.
+        trustVerdicts.withLock { $0[key] = verdict }
+        return verdict
+    }
+
+    private static let trustVerdicts = Mutex<[TrustKey: Bool]>([:])
+
+    private struct TrustKey: Hashable {
+        var path: String
+        var team: String
+        var device: dev_t
+        var inode: ino_t
+        var size: off_t
+        var modified: [Int]
+        var changed: [Int]
+
+        init?(path: String, team: String) {
+            var info = stat()
+            guard stat(path, &info) == 0 else { return nil }
+            self.path = path
+            self.team = team
+            device = info.st_dev
+            inode = info.st_ino
+            size = info.st_size
+            modified = [info.st_mtimespec.tv_sec, info.st_mtimespec.tv_nsec]
+            changed = [info.st_ctimespec.tv_sec, info.st_ctimespec.tv_nsec]
+        }
     }
 
     private static func requirement(team: String, identifier: String?) -> SecRequirement? {

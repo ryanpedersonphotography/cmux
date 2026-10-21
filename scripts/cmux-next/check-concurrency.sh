@@ -8,7 +8,8 @@
 #
 # Rule sets:
 #   everywhere: waits, sleeps, sync hops to main, raw locks, nested run-loop
-#               spinning, synchronous XPC, blocking FileHandle reads,
+#               spinning, synchronous XPC, blocking FileHandle reads, dlopen
+#               (dyld's loader lock), whole-file code signature validation,
 #               unbounded AsyncStream buffers, and deadlines raced inside a
 #               task group (the group waits for a loser that ignores
 #               cancellation, so the deadline becomes a hang).
@@ -107,6 +108,16 @@ EVERYWHERE = [
     # Both resolve every local name through DNS/mDNS and have blocked the
     # main thread for ~35 s. Use gethostname or SCDynamicStoreCopyComputerName.
     ("blocking host-name lookup (Host.current / ProcessInfo.hostName)", r"\bHost\.current\(\)|\bprocessInfo\.hostName\b"),
+    # dlopen holds dyld's loader lock while it maps, validates and fixes up the image; every
+    # main-thread dlopen, dladdr and image lookup waits for that lock, on any thread's load.
+    # The CEF framework's off-main load held it ~2 s on a cold cache and hung the main thread
+    # (Sentry MainThreadHang in dyld4::APIs::dlopen_from). Read the file into the cache first,
+    # and say why the load is short.
+    ("dlopen (holds dyld's loader lock: main-thread dlopen/dladdr wait on it from any thread)", r"(?<![.\w])dlopen\("),
+    # Static code validation hashes the whole file (72 MB acpmux, the 367 MiB CEF framework):
+    # seconds on a cold file cache. Never on the main thread; cache the verdict by file identity.
+    ("SecStaticCodeCheckValidity (hashes the whole file; never on the main thread)",
+     r"\bSecStaticCodeCheckValidity(WithErrors)?\("),
     # architecture.md 5a: no unbounded buffers. `makeStream()` without a
     # policy and the `AsyncStream { }` initializer default to unbounded.
     ("unbounded AsyncStream buffer (give it a cap and an overflow policy)",

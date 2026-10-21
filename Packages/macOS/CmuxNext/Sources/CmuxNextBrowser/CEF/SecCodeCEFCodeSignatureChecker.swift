@@ -29,6 +29,7 @@ struct SecCodeCEFCodeSignatureChecker: CEFCodeSignatureChecking {
         guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess,
               let requirement else { return false }
         let flags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate | kSecCSCheckNestedCode)
+        // concurrency-allow: CEFRuntime.loadLibrary runs it on the library-load thread (Task.detached), never main
         return SecStaticCodeCheckValidity(code, flags, requirement) == errSecSuccess
     }
 }
