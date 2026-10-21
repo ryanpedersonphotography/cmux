@@ -268,17 +268,27 @@ pub(crate) fn create_dir_all(dir: &Path) -> io::Result<()> {
     if dir.is_dir() {
         return Ok(());
     }
-    if let Some(parent) = dir.parent().filter(|p| !p.as_os_str().is_empty()) {
-        create_dir_all(parent)?;
+    let mut missing = Vec::new();
+    let mut current = dir;
+    while !current.is_dir() {
+        missing.push(current.to_path_buf());
+        let Some(parent) =
+            current.parent().filter(|parent| !parent.as_os_str().is_empty() && *parent != current)
+        else {
+            break;
+        };
+        current = parent;
     }
     let sd = descriptor(&user_sid()?, true)?;
     let attrs = attributes(&sd);
-    let name = wide(dir);
-    // SAFETY: a NUL-terminated name and valid attributes.
-    if unsafe { CreateDirectoryW(name.as_ptr(), &attrs) } == 0 {
-        let e = io::Error::last_os_error();
-        if e.kind() != io::ErrorKind::AlreadyExists {
-            return Err(e);
+    for path in missing.iter().rev() {
+        let name = wide(path);
+        // SAFETY: a NUL-terminated name and valid attributes.
+        if unsafe { CreateDirectoryW(name.as_ptr(), &attrs) } == 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::AlreadyExists {
+                return Err(error);
+            }
         }
     }
     Ok(())
