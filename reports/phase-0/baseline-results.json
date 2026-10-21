@@ -329,5 +329,7 @@
     "studioSnapshotAudited": true
   },
   "addendumCommit": "23319ce2a4b37d92f48ec5332d8e4d8b498a96cd",
-  "addendumCommitNote": "SHA of the commit that added the addendum documents. A later commit only records this value."
+  "addendumCommitNote": "SHA of the commit that added the addendum documents. A later commit only records this value.",
+  "studioAuditCommit": "f9fbc4555c50ed835f844cb981042b6d2328c9c1",
+  "studioAuditCommitNote": "SHA of the commit that recorded the Studio audit and the ADR recommendation. A later commit only records this value."
 }
