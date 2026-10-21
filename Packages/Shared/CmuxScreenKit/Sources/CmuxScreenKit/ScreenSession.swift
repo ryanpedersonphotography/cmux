@@ -34,6 +34,8 @@ public final class ScreenSession {
         public var decodeMs: Double?
         /// The codec and decoder ("H264 HW"), or the busiest RFB encoding.
         public var encoding = "-"
+        /// The frame rate the Mac streams at (60, or up to 120 when both
+        /// displays can); nil from a Mac that does not say (stream only).
         public var targetFps: Int?
     }
 
@@ -100,7 +102,17 @@ public final class ScreenSession {
     /// An app's own identifier for what this session opened (a saved host),
     /// so it can keep the session's preferences afterwards.
     @ObservationIgnored public var hostID: UUID?
-    @ObservationIgnored public var displayMaximumFrameRate: Int?
+    /// The most frames per second the display showing this session refreshes
+    /// at (`NSScreen.maximumFramesPerSecond`), told to a screen stream's Mac
+    /// on connect and whenever it changes: with Auto or Smooth Motion the
+    /// Mac streams at up to 120 fps when its own display can too. Nil (an
+    /// app that never sets it) keeps the stream at 60.
+    @ObservationIgnored public var displayMaximumFrameRate: Int? {
+        didSet {
+            guard let fps = displayMaximumFrameRate, fps != oldValue else { return }
+            stream?.setDisplayFrameRate(fps)
+        }
+    }
     /// The remote pointer in framebuffer pixels.
     @ObservationIgnored public private(set) var pointer = CGPoint(x: 100, y: 100)
 
@@ -236,6 +248,7 @@ public final class ScreenSession {
         if let reconnectStarted { viewer.openTimeout = Self.attemptTimeout(elapsed: Date().timeIntervalSince(reconnectStarted)) }
         relayErrors = []
         isStalled = false
+        stats.targetFps = nil
         viewer.onStall = { [weak self, weak viewer] stalled in
             Task { @MainActor in
                 guard let self, self.stream === viewer else { return }
@@ -254,6 +267,7 @@ public final class ScreenSession {
         viewer.onDisplays = { [weak self] message in
             Task { @MainActor in
                 let sizes = (message.displays ?? []).map { CGSize(width: $0.w, height: $0.h) }
+                if let fps = message.fps, self?.stats.targetFps != fps { self?.stats.targetFps = fps }
                 self?.onStreamDisplays?(sizes, message.current ?? 0)
             }
         }
@@ -272,6 +286,8 @@ public final class ScreenSession {
                 reconnectAttempts = 0
                 reconnectStarted = nil
                 isReconnecting = false
+                // The display's rate first: the Mac then sets up the quality at the agreed rate.
+                if let fps = displayMaximumFrameRate { viewer.setDisplayFrameRate(fps) }
                 viewer.setQuality(preferences.quality)
                 phase = .connected(VNCServerInfo(width: 0, height: 0, name: name, nativeFormat: .bgrx,
                                                  protocolMinor: 8, securityType: 0))

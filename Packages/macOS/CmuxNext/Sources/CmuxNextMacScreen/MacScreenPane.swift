@@ -352,7 +352,38 @@ public final class MacScreenPaneView: NSView {
         gate == .open && card == nil && !viewOnly
     }
 
-    func reportDisplayRefresh(_ fps: Int?) {}
+    /// Tells the session how fast this window's display refreshes (nil: no
+    /// screen, the last rate stays), so the Mac can stream at up to 120 fps
+    /// on a ProMotion display.
+    func reportDisplayRefresh(_ fps: Int?) {
+        guard let fps, fps > 0, let session = model.session, session.displayMaximumFrameRate != fps else { return }
+        session.displayMaximumFrameRate = fps
+    }
+
+    /// Follows the window's display: moving to another display, or a
+    /// display's mode changing (ProMotion on or off), reports its rate again.
+    /// Out of a window, nothing is watched.
+    private var displayWatch: [Task<Void, Never>] = []
+
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        for task in displayWatch { task.cancel() }
+        displayWatch = []
+        guard let window else { return }
+        reportDisplayRefresh(window.screen?.maximumFramesPerSecond)
+        displayWatch = [
+            Task { @MainActor [weak self, window] in
+                for await _ in NotificationCenter.default.notifications(named: NSWindow.didChangeScreenNotification, object: window) {
+                    self?.reportDisplayRefresh(self?.window?.screen?.maximumFramesPerSecond)
+                }
+            },
+            Task { @MainActor [weak self] in
+                for await _ in NotificationCenter.default.notifications(named: NSApplication.didChangeScreenParametersNotification) {
+                    self?.reportDisplayRefresh(self?.window?.screen?.maximumFramesPerSecond)
+                }
+            },
+        ]
+    }
 
     /// The input gate was synced (the pane tells the system shortcut tap).
     var onInputGateChange: (() -> Void)?
