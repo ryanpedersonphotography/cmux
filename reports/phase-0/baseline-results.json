@@ -1,0 +1,342 @@
+{
+  "phase": 0,
+  "status": "baseline_documented",
+  "nextPhaseReady": false,
+  "auditedAt": "2026-10-21",
+  "environment": {
+    "os": "linux",
+    "note": "No Swift toolchain, Zig, or xcodebuild. Ghostty submodule not checked out. macOS builds were not faked."
+  },
+  "baselineCommit": "72a39c338ef6e4d37e9ab29892f6561df1527781",
+  "baselineCommitDate": "2026-10-20T17:46:57-0700",
+  "originMain": "72a39c338ef6e4d37e9ab29892f6561df1527781",
+  "upstreamRemote": "https://github.com/manaflow-ai/cmux.git",
+  "upstreamMain": "72a39c338ef6e4d37e9ab29892f6561df1527781",
+  "forkDelta": "none; merge-base equals both mains",
+  "ghosttySubmodule": "ef4f1570d62117ebc51e3b0f07ad4f34032267b6",
+  "ghosttyMinimumZig": "0.16.0",
+  "bonsplitSubmodule": "d67d1b114fd20edba7a19f76cc39e35bde43c2d8",
+  "homebrewCmuxSubmodule": "a5f372ecfa5ee3903af6e1faba0eda096b4f5746",
+  "studied": {
+    "tellurion": {
+      "url": "https://github.com/steventsvik/Tellurion",
+      "commit": "41a91325f7298baee7957a39757ceae558a8fee8",
+      "license": "AGPL-3.0",
+      "codeCopied": false
+    },
+    "myzig": {
+      "url": "https://github.com/hunghg255/myzig",
+      "commit": "4203821d13d63b1c1a9b24ac392145273211bda3",
+      "license": "MIT",
+      "codeCopied": false
+    }
+  },
+  "implementationCommit": "8926363815581a6b86d4ff2b012fe5a23ef05a66",
+  "implementationCommitNote": "SHA of the commit that added the Phase 0 documents. A later commit only records this value in the JSON.",
+  "architectureDecisions": [
+    "Recommendation, awaiting approval: staged hybrid ending at option B. Supervise Studio's Next.js server with plain Node. Keep its libSQL file as the only project database. Host the UI in a WKWebView at 127.0.0.1. Do not copy Studio into this repo. Option A is not recommended. Stage 1 as first written is withdrawn: it deferred authentication. The replacement work items are docs/architecture/stage-1-plan.md. Auth delivery is an open choice; the recommendation is a minimal Studio token change. Whether a later bundle is a combined work is for the user and counsel."
+  ],
+  "knownLimitations": [
+    "macOS app build and unit tests were not run.",
+    "GhosttyKit was not built or downloaded.",
+    "Swift packages were not type-checked; swiftc is absent.",
+    "config-schema and feature-flags checks were skipped because they read BUSL paths under web/.",
+    "BUSL server trees were not built.",
+    "Codex Teams Feed reply path was identified but not executed.",
+    "No GitHub Actions workflow was added or dispatched.",
+    "Studio SHA 35a0d1af631a53958883e61c1b98ab072195b11c was supplied as a git archive with no .git, so the commit object was not recomputed here.",
+    "pnpm test:e2e was not run. pnpm test does not include apps/e2e.",
+    "The Electron binary was not launched. Desktop tests passed under Vitest with a stub.",
+    "next build and next start were not run. pnpm test does not start the server.",
+    "Any app unit-test job has to provision a verified GhosttyKit.xcframework before test-unit.sh. No workflow file was added."
+  ],
+  "checks": [
+    {
+      "id": "verify-local-help",
+      "status": "passed",
+      "command": "python3 scripts/verify-local.py --help",
+      "exitCode": 0,
+      "summary": "Printed usage. Default entry point is python3 scripts/verify-local.py.",
+      "gate": "linux"
+    },
+    {
+      "id": "verify-local-list",
+      "status": "passed",
+      "command": "python3 scripts/verify-local.py --all --list",
+      "exitCode": 0,
+      "summary": "Listed 16 static checks plus optional swift-syntax. Did not execute them.",
+      "gate": "linux"
+    },
+    {
+      "id": "verify-local-selected",
+      "status": "passed",
+      "command": "python3 scripts/verify-local.py --jobs 4 --timeout 120 --only xcstrings --only localization --only localization-defaults --only project-tests --only project --only test-wiring-sync --only wire-app-sources --only ui-lab --only ui-fuzzer --only launch-policy --only test-wiring --only package-groups --only remote-tmux-waits-tests --only remote-tmux-waits",
+      "exitCode": 0,
+      "summary": "14/14 selected checks passed. Native compilation, app tests, and app launch were not checked. Durations and nested tests: xcstrings 0.62s; localization 2.38s; localization-defaults 2.73s; project-tests 1.68s (15 tests, 1 skipped); project 0.82s; test-wiring-sync 1.63s (18 tests); wire-app-sources 0.07s (13 tests); ui-lab 0.06s (4 tests); ui-fuzzer 0.17s (22 tests); launch-policy 0.03s; test-wiring 2.13s; package-groups 0.04s; remote-tmux-waits-tests 0.52s; remote-tmux-waits 0.12s.",
+      "gate": "linux"
+    },
+    {
+      "id": "config-schema",
+      "status": "not_run",
+      "command": "python3 scripts/generate-cmux-config-schema.py --check",
+      "exitCode": null,
+      "reason": "Reads web/data/cmux.schema.json, which is under the BUSL tree. Not run.",
+      "gate": "linux",
+      "gateNote": "Linux-runnable. Not run because it reads the BUSL tree under web/."
+    },
+    {
+      "id": "feature-flags",
+      "status": "not_run",
+      "command": "python3 scripts/lint-feature-flags.py",
+      "exitCode": null,
+      "reason": "Reads web/app/lib/feature-flags.ts, which is under the BUSL tree. Not run.",
+      "gate": "linux",
+      "gateNote": "Linux-runnable. Not run because it reads the BUSL tree under web/."
+    },
+    {
+      "id": "swift-syntax",
+      "status": "not_run",
+      "command": "python3 scripts/verify-local.py --swift-changed origin/main",
+      "exitCode": null,
+      "reason": "swiftc is not installed. verify-local marks swift-syntax unsupported without it.",
+      "gate": "linux",
+      "gateNote": "The Python driver runs on Linux. It executes only when swiftc is installed. swiftc is not xcodebuild. Absent here."
+    },
+    {
+      "id": "git-diff-check",
+      "status": "passed",
+      "command": "git diff --check",
+      "exitCode": 0,
+      "summary": "No whitespace errors on the audited tree before docs were added.",
+      "gate": "linux"
+    },
+    {
+      "id": "ghostty-zig-version-script",
+      "status": "failed_preexisting_environment",
+      "command": "bash scripts/ghostty-zig-version.sh",
+      "exitCode": 1,
+      "summary": "error: Ghostty Zig manifest not found: /workspace/ghostty/build.zig.zon. Submodule is not initialized. This is the expected result in this checkout, not a product failure.",
+      "gate": "linux"
+    },
+    {
+      "id": "ghostty-pin-zig-manifest",
+      "status": "passed",
+      "command": "curl -fsSL https://raw.githubusercontent.com/manaflow-ai/ghostty/ef4f1570d62117ebc51e3b0f07ad4f34032267b6/build.zig.zon",
+      "exitCode": 0,
+      "summary": "Pinned manifest says .minimum_zig_version = \"0.16.0\" and .version = \"1.3.2-dev\".",
+      "gate": "linux"
+    },
+    {
+      "id": "swift-test-packages",
+      "status": "not_run",
+      "command": "swift test --package-path Packages/macOS/CmuxControlSocket",
+      "exitCode": null,
+      "reason": "swift is not installed. Package tests were not faked. Many packages also import AppKit and cannot link on Linux.",
+      "gate": "mac_command_line_tools",
+      "gateNote": "swift test / swift build. Command Line Tools include the macOS SDK and do not include xcodebuild. AppKit packages need a Mac. Not run on this Linux host."
+    },
+    {
+      "id": "setup",
+      "status": "not_run",
+      "command": "./scripts/setup.sh",
+      "exitCode": null,
+      "reason": "requires macOS. Initializes submodules, Rust, and GhosttyKit. Not run here.",
+      "gate": "full_xcode",
+      "gateNote": "scripts/setup.sh exits unless xcodebuild -version succeeds. Command Line Tools are not enough."
+    },
+    {
+      "id": "metal-toolchain",
+      "status": "not_run",
+      "command": "xcodebuild -downloadComponent MetalToolchain",
+      "exitCode": null,
+      "reason": "requires macOS.",
+      "gate": "full_xcode"
+    },
+    {
+      "id": "tagged-dev-build",
+      "status": "not_run",
+      "command": "CMUX_DEV_BACKEND_MODE=local ./scripts/reload.sh --tag agentflow-audit --build-only",
+      "exitCode": null,
+      "reason": "requires macOS. Documented in docs/contributor-verification.md. Wrapper invokes xcodebuild -project cmux.xcodeproj -scheme cmux -configuration Debug -destination platform=macOS.",
+      "gate": "full_xcode"
+    },
+    {
+      "id": "tagged-dev-launch",
+      "status": "not_run",
+      "command": "CMUX_DEV_BACKEND_MODE=local ./scripts/reload.sh --tag agentflow-audit --launch",
+      "exitCode": null,
+      "reason": "requires macOS. Also needs a credentials file for a real launch. Not run.",
+      "gate": "full_xcode"
+    },
+    {
+      "id": "unit-test-compile",
+      "status": "not_run",
+      "command": "./scripts/test-unit.sh -derivedDataPath \"$PWD/.build/contributor-tests\" build-for-testing",
+      "exitCode": null,
+      "reason": "requires macOS. scripts/test-unit.sh uses scheme cmux-unit, configuration Debug, destination platform=macOS.",
+      "gate": "full_xcode"
+    },
+    {
+      "id": "unit-tests",
+      "status": "not_run",
+      "command": "./scripts/test-unit.sh -derivedDataPath \"$PWD/.build/contributor-tests\" test",
+      "exitCode": null,
+      "reason": "requires macOS. Default action is test on scheme cmux-unit (cmuxTests).",
+      "gate": "full_xcode"
+    },
+    {
+      "id": "cli-tests",
+      "status": "not_run",
+      "command": "xcodebuild -project cmux.xcodeproj -scheme cmux-cli-tests -configuration Debug -destination 'platform=macOS' test",
+      "exitCode": null,
+      "reason": "requires macOS. Scheme cmux-cli-tests builds cmuxCLITests.",
+      "gate": "full_xcode"
+    },
+    {
+      "id": "ui-test-example",
+      "status": "not_run",
+      "command": "xcodebuild test -project cmux.xcodeproj -scheme cmux -configuration Debug -destination 'platform=macOS' -derivedDataPath /tmp/cmux-uitest-dd -only-testing:cmuxUITests/RemoteTmuxSizingUITests",
+      "exitCode": null,
+      "reason": "requires macOS. UI tests are not the PR default lane.",
+      "gate": "full_xcode"
+    },
+    {
+      "id": "ghosttykit-build",
+      "status": "not_run",
+      "command": "cd ghostty && zig build -Dcrash-report-subdir=cmux/crash -Dsentry=false -Di18n=false -Demit-xcframework=true -Demit-macos-app=false -Dxcframework-target=universal -Doptimize=ReleaseFast",
+      "exitCode": null,
+      "reason": "requires macOS and Zig 0.16.0. Workflow .github/workflows/build-ghosttykit.yml is workflow_dispatch. Prebuilt download is scripts/ensure-ghosttykit.sh against checksum ae38ade4e1c7e4d6ce21b8d7c16e9a95c346005848b4e2daa2afb6f56084c024 for pin ef4f1570d62117ebc51e3b0f07ad4f34032267b6.",
+      "gate": "mac_zig",
+      "gateNote": "zig build for GhosttyKit. Needs Zig 0.16.0 and a Mac. Not a Command Line Tools command and not xcodebuild."
+    },
+    {
+      "id": "test-wiring-sync-write",
+      "status": "not_run",
+      "command": "./scripts/sync-test-wiring --check",
+      "exitCode": null,
+      "reason": "The check form is bash tests/test_ci_pbxproj_test_wiring.sh, which passed inside verify-local as test-wiring. The write-mode sync was not run.",
+      "gate": "linux"
+    },
+    {
+      "id": "studio-clone",
+      "status": "failed",
+      "gate": "linux",
+      "command": "gh repo clone ryanpedersonphotography/agentflow-studio /tmp/audit-external/agentflow-studio -- --branch main",
+      "exitCode": 1,
+      "summary": "GraphQL: Could not resolve to a Repository with the name 'ryanpedersonphotography/agentflow-studio'."
+    },
+    {
+      "id": "studio-api",
+      "status": "failed",
+      "gate": "linux",
+      "command": "gh api repos/ryanpedersonphotography/agentflow-studio",
+      "exitCode": 1,
+      "summary": "HTTP 404 Not Found."
+    },
+    {
+      "id": "studio-ls-remote",
+      "status": "failed",
+      "gate": "linux",
+      "command": "git ls-remote https://github.com/ryanpedersonphotography/agentflow-studio.git 35a0d1af631a53958883e61c1b98ab072195b11c",
+      "exitCode": 128,
+      "summary": "remote: Repository not found."
+    },
+    {
+      "id": "studio-archive-extract",
+      "status": "passed",
+      "gate": "linux",
+      "command": "tar -xzf uploads/agentflow-studio-35a0d1af.tar.gz -C /tmp/agentflow-studio",
+      "exitCode": 0,
+      "summary": "Extracted outside the cmux tree. No .git directory. Not committed."
+    },
+    {
+      "id": "studio-pnpm-install",
+      "status": "passed",
+      "gate": "linux",
+      "command": "pnpm install --frozen-lockfile",
+      "exitCode": 0,
+      "summary": "pnpm 12.8.1, Node v22.23.3. 1176 packages added. Done in 7.3s. Ran in /tmp/agentflow-studio."
+    },
+    {
+      "id": "studio-typecheck",
+      "status": "passed",
+      "gate": "linux",
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "summary": "turbo run typecheck. 22 packages successful. 42.639s."
+    },
+    {
+      "id": "studio-test",
+      "status": "passed",
+      "gate": "linux",
+      "command": "pnpm test",
+      "exitCode": 0,
+      "summary": "turbo run test. 21 tasks successful. 17.641s. apps/e2e has test:e2e and was not part of this command."
+    }
+  ],
+  "counts": {
+    "githubWorkflows": 155,
+    "sourcesSwift": 2769,
+    "cmuxTestsSwift": 1307,
+    "cmuxCLITestsSwift": 41,
+    "cmuxUITestsSwift": 70,
+    "packageTestSwift": 2661,
+    "testsPython": 480,
+    "testsShell": 97,
+    "testsV2Files": 146,
+    "upstreamCommits30d": 4867,
+    "upstreamCommits7d": 339,
+    "upstreamCommits1d": 34
+  },
+  "macosVerificationCommands": [
+    "git clone --recursive https://github.com/ryanpedersonphotography/cmux.git",
+    "./scripts/setup.sh",
+    "xcodebuild -downloadComponent MetalToolchain",
+    "python3 scripts/verify-local.py --all",
+    "CMUX_DEV_BACKEND_MODE=local ./scripts/reload.sh --tag agentflow-audit --build-only",
+    "./scripts/test-unit.sh -derivedDataPath \"$PWD/.build/contributor-tests\" build-for-testing",
+    "./scripts/test-unit.sh -derivedDataPath \"$PWD/.build/contributor-tests\" test",
+    "xcodebuild -project cmux.xcodeproj -scheme cmux-cli-tests -configuration Debug -destination 'platform=macOS' test"
+  ],
+  "gateLegend": {
+    "linux": "Runs on Linux. No Xcode and no macOS SDK.",
+    "mac_command_line_tools": "Runs on a Mac with Command Line Tools only: swift build, swift test, node, pnpm. The tools include the macOS SDK and do not include xcodebuild.",
+    "full_xcode": "Needs full Xcode: xcodebuild, the app scheme, or UI tests.",
+    "mac_zig": "Needs a Mac and Zig. Separate from Command Line Tools and from xcodebuild."
+  },
+  "agentflowStudio": {
+    "url": "https://github.com/ryanpedersonphotography/agentflow-studio",
+    "requestedSha": "35a0d1af631a53958883e61c1b98ab072195b11c",
+    "resolvedSha": null,
+    "snapshot": "user-supplied git archive uploads/agentflow-studio-35a0d1af.tar.gz, extracted at /tmp/agentflow-studio",
+    "gitMetadata": false,
+    "repoModified": false,
+    "pushed": false,
+    "committedIntoCmux": false,
+    "license": "Reading of the files only: no LICENSE file and no license field in the root or any workspace package.json. No evidence in the archive that the user owns every contribution. Whether bundling with GPL cmux is a combined work is for the user and counsel. Not a legal conclusion.",
+    "claimsVerified": true,
+    "recommendation": "staged hybrid ending at B, awaiting approval",
+    "checks": {
+      "pnpmInstallExit": 0,
+      "typecheckExit": 0,
+      "testExit": 0,
+      "nextBuildExit": null,
+      "nextStartExit": null
+    }
+  },
+  "addendum": {
+    "acceptedPhase0AsAuditOnly": true,
+    "implementationArchitectureApproved": false,
+    "phase1Started": false,
+    "adr": "docs/architecture/adr-0001-orchestration-backend.md",
+    "adrStatus": "recommended_staged_hybrid_stage1_scope_withdrawn_awaiting_approval",
+    "studioSnapshotAudited": true,
+    "codexReview": "docs/architecture/review-response-codex-1.md",
+    "stage1Plan": "docs/architecture/stage-1-plan.md",
+    "authChoice": "open. Recommendation is a minimal Studio token change. Alternative is an authenticated native proxy, which does not deny a second local process while Studio listens without a token."
+  },
+  "addendumCommit": "23319ce2a4b37d92f48ec5332d8e4d8b498a96cd",
+  "addendumCommitNote": "SHA of the commit that added the addendum documents. A later commit only records this value.",
+  "studioAuditCommit": "f9fbc4555c50ed835f844cb981042b6d2328c9c1",
+  "studioAuditCommitNote": "SHA of the commit that recorded the Studio audit and the ADR recommendation. A later commit only records this value."
+}
