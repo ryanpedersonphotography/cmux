@@ -92,6 +92,9 @@ fn is_test_panic_thread(thread: &str) -> bool {
 pub const SHUTDOWN_BUDGET: Duration = Duration::from_secs(5);
 
 pub async fn run(opts: DaemonOptions) -> Result<()> {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 19 daemon run entry");
+    }
     // The CLI restores default SIGPIPE so `acpmux ls | head` ends quietly. A
     // daemon must not die when its launcher or a client goes away mid-write:
     // a closed pipe is an ordinary write error here.
@@ -123,7 +126,13 @@ pub async fn run(opts: DaemonOptions) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
     // State holds tokens, prompts and tool output. Older builds created the
     // home with the process umask; narrow it before reading any of them.
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 20 daemon before private state");
+    }
     crate::config::private_state_dir(&home())?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 21 daemon after private state");
+    }
     install_panic_log();
     let mut config = Config::load()?;
     // config.json holds the dashboard token: owner-only, also when another
@@ -759,9 +768,18 @@ pub async fn wait_for_exit() -> bool {
 
 /// Connect to the daemon, starting one if needed.
 pub async fn connect(autostart: bool) -> Result<Arc<Client>> {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 10 connect entry");
+    }
     let path = socket_path();
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 11 socket path resolved");
+    }
     if let Ok(c) = Client::connect(&path).await {
         return Ok(c);
+    }
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 12 client connect failed");
     }
     if !autostart {
         return Err(anyhow!("no acpmux daemon at {} (run `acpmux daemon`)", path.display()));

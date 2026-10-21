@@ -263,6 +263,9 @@ pub(super) async fn run(cmd: Command, json_out: bool, _suppress_reads: bool) -> 
             Ok(())
         }
         which @ (Command::Status | Command::DaemonStart { .. }) => {
+            if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+                eprintln!("acpmux-trace 08 status dispatch");
+            }
             let start = matches!(which, Command::DaemonStart { .. });
             // A keyed start (cx-0q7o, D2): the daemon must be the one this
             // command starts, with the key from the app's own exec.
@@ -274,7 +277,11 @@ pub(super) async fn run(cmd: Command, json_out: bool, _suppress_reads: bool) -> 
             if let Command::DaemonStart { person_key_fd: Some(_) } = &which {
                 return Err(crate::platform::unsupported("--person-key-fd"));
             }
-            match connect(start).await {
+            let connected = connect(start).await;
+            if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+                eprintln!("acpmux-trace 09 status connect returned");
+            }
+            match connected {
                 Ok(client) => {
                     let v = client.request(method::MUX_STATUS, json!({})).await?;
                     if json_out {

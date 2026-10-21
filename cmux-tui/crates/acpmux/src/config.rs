@@ -358,11 +358,20 @@ fn absolute(path: PathBuf) -> PathBuf {
 /// so daemon and clients agree.
 #[cfg(windows)]
 pub fn socket_path() -> PathBuf {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 101 socket path entry");
+    }
     if let Some(v) = std::env::var("ACPMUX_SOCKET").ok().filter(|v| !v.is_empty()) {
         return absolute(PathBuf::from(v));
     }
     let preferred = home().join("acpmux.sock");
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 102 preferred socket built");
+    }
     if preferred.as_os_str().len() < 96 {
+        if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+            eprintln!("acpmux-trace 103 preferred socket returned");
+        }
         return preferred;
     }
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;

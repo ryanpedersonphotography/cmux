@@ -1,4 +1,7 @@
 fn main() -> anyhow::Result<()> {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 01 main entry");
+    }
     // A terminal's launch credential names that one terminal: this process
     // and everything it starts serve many, so it is dropped before any thread
     // exists (plans/cmux-next/identity.md section 2).
@@ -8,6 +11,9 @@ fn main() -> anyhow::Result<()> {
     for key in acpmux::config::CHIEF_CREDENTIAL_ENV {
         // SAFETY: as above, before any thread exists.
         unsafe { std::env::remove_var(key) };
+    }
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 02 main env scrubbed");
     }
     acpmux::cli::entry::main(std::env::args_os().skip(1).collect(), Default::default())
 }

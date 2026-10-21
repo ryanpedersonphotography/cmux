@@ -43,10 +43,16 @@ pub async fn connect(path: &Path) -> io::Result<Stream> {
 /// owner is not our user.
 #[cfg(windows)]
 pub async fn connect(path: &Path) -> io::Result<Stream> {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 13 local stream before blocking connect");
+    }
     let path = path.to_owned();
     let stream = tokio::task::spawn_blocking(move || cmux::local_socket::connect_same_user(&path))
         .await
         .map_err(io::Error::other)??;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 14 local stream connected");
+    }
     bridge(stream)
 }
 

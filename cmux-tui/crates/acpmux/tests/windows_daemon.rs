@@ -37,6 +37,7 @@ fn acpmux_with(exe: &Path, home: &Path, agents: daemon_env::Agents) -> Command {
     let mut cmd = Command::new(exe);
     daemon_env::apply(&mut cmd, home, agents, &[]);
     cmd.env("ACPMUX_HOME", home)
+        .env("ACPMUX_TRACE_STARTUP", "1")
         .env("ACPMUX_CATALOG_FETCH", "0")
         .env("ACPMUX_REGISTRY_FETCH", "0")
         .env_remove("ACPMUX_SOCKET")

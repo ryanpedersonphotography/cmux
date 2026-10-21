@@ -297,13 +297,28 @@ pub(crate) fn create_dir_all(dir: &Path) -> io::Result<()> {
 /// Makes `dir` owner-only, or checks an existing one: a wider folder is
 /// refused (mode 0700 and the uid check on Unix).
 pub(crate) fn private_dir(dir: &Path) -> io::Result<()> {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 30 private dir entry");
+    }
     ensure_safe_parent(dir)?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 31 private dir parent safe");
+    }
     create_dir_all(dir)?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 32 private dir created");
+    }
     let opened = open_directory(dir)?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 33 private dir opened");
+    }
     finish_private_dir(dir, &opened)
 }
 
 fn finish_private_dir(dir: &Path, opened: &File) -> io::Result<()> {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 34 finish private dir entry");
+    }
     use std::os::windows::fs::MetadataExt;
     let attributes = opened.metadata()?.file_attributes();
     if attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 || attributes & FILE_ATTRIBUTE_DIRECTORY == 0
@@ -314,14 +329,26 @@ fn finish_private_dir(dir: &Path, opened: &File) -> io::Result<()> {
         ));
     }
     ensure_opened_owner(opened)?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 35 private dir owner checked");
+    }
     ensure_no_other_changer(opened, true)?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 36 private dir changer checked");
+    }
     // Normalize even an owner-only but read-only legacy DACL: state
     // directories must let this user create, replace and delete children.
     restrict_opened(opened, true)?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 37 private dir restricted");
+    }
     if !only_owner_reads_opened(opened)? {
         return Err(io::Error::new(io::ErrorKind::PermissionDenied, "directory is not owner-only"));
     }
     let reopened = open_directory(dir)?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 38 private dir reopened");
+    }
     if !same_opened_object(opened, &reopened)? {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,

@@ -28,6 +28,9 @@ impl Default for Invocation {
 
 /// Run the acpmux command line. `args` excludes the program name.
 pub fn main(args: Vec<OsString>, invocation: Invocation) -> Result<()> {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 03 cli entry");
+    }
     // A launcher can hand us a blocked signal mask (an app thread that
     // blocks SIGTERM, SIGCHLD, ...). exec keeps the mask, and threads
     // inherit it, so SIGTERM would stay pending forever and child exits
@@ -46,13 +49,17 @@ pub fn main(args: Vec<OsString>, invocation: Invocation) -> Result<()> {
     if let Some(home) = invocation.home.clone() {
         crate::config::set_home_override(home);
     }
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?
-        .block_on(async_main(args, invocation))
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 04 runtime built");
+    }
+    runtime.block_on(async_main(args, invocation))
 }
 
 async fn async_main(args: Vec<OsString>, invocation: Invocation) -> Result<()> {
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 05 async entry");
+    }
     // `acpmux ls | head` must end quietly, not panic on a closed pipe.
     #[cfg(unix)]
     unsafe {
@@ -76,6 +83,9 @@ async fn async_main(args: Vec<OsString>, invocation: Invocation) -> Result<()> {
     // clap keeps command names as `&'static str`; one per process.
     let name: &'static str = Box::leak(invocation.display_name.clone().into_boxed_str());
     let matches = Cli::command().name(name).bin_name(name).get_matches_from(argv);
+    if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+        eprintln!("acpmux-trace 06 clap matched");
+    }
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     let command = cli.command.map(flatten).map(|c| match c {
         Command::New(mut a) if run_alias => {
@@ -204,6 +214,9 @@ async fn async_main(args: Vec<OsString>, invocation: Invocation) -> Result<()> {
             Ok(())
         }
         Some(cmd) => {
+            if std::env::var_os("ACPMUX_TRACE_STARTUP").is_some() {
+                eprintln!("acpmux-trace 07 client command");
+            }
             let json_out = cli.json;
             match run_client(cmd, json_out, cli.suppress_reads).await {
                 Ok(()) => Ok(()),
