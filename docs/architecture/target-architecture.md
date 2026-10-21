@@ -6,21 +6,30 @@ this file is accepted. Nothing here is implemented.
 
 Audited baseline: `72a39c338ef6e4d37e9ab29892f6561df1527781`.
 
-The orchestration choice is withheld. See
+The orchestration recommendation is a staged hybrid that ends at Studio's
+Next.js server and its libSQL file. It is not approved. See
 [adr-0001-orchestration-backend.md](adr-0001-orchestration-backend.md).
-The plan that follows a decision is
+The plan that follows approval is
 [phase-1-plan-revised.md](phase-1-plan-revised.md). It is a plan only.
 
 ## Decision
 
-No backend is selected.
+Recommend option B, staged. Do not open a second project database.
 
-The earlier text of this file recommended an in-process Swift package and a
-new SQLite file as the project authority. That recommendation is withdrawn
-as the default. The addendum allows a second authoritative project database
-only when reusing AgentFlow Studio's persistence is impractical. Studio was
-not readable, so that impracticality was not shown, and Studio's backend was
-not shown to run without Electron either.
+Studio's engine runs as plain Node. `pnpm dev` is Next.js on
+`127.0.0.1:3300`. Electron is a desktop shell
+(`apps/desktop`) that supervises the same server. Persistence is one
+libSQL `documents` table (`packages/db/src/index.ts`), default
+`file:./data/grokbot.db`. Projects, workflows, teams, tasks, and worktrees
+are collections in that file. Reusing it is practical. A new Swift SQLite
+file is not the recommendation.
+
+Stage 1 supervises the user's existing checkout and does not copy it into
+this repo. Stage 2, shipping the server inside the app, waits on a license
+grant. The archive has no `LICENSE` and no `package.json` `license` field.
+Until the user grants one, Studio is all rights reserved and stays out of
+the bundle. The user, as copyright holder, is who can make that grant.
+cmux stays GPL-3.0-or-later.
 
 What still holds:
 
@@ -31,8 +40,9 @@ What still holds:
   `CLI/cmux.swift`.
 - Studio's React UI stays in React. This proposal does not rewrite it in
   SwiftUI. Hosting is
-  [react-panel-hosting.md](react-panel-hosting.md): conditional go for a
-  dedicated `WKWebView` panel, no-go for `BrowserPanel`.
+  [react-panel-hosting.md](react-panel-hosting.md): a dedicated `WKWebView`
+  loads the loopback Next origin. `BrowserPanel`, `loadFileURL`, and
+  `afstudio-shell://` are the wrong loaders for the product UI.
 - Native edits, once a backend is chosen, are the five boundaries in the
   revised Phase 1 plan.
 
@@ -84,9 +94,8 @@ sizes are in
 
 ## Persistence
 
-Do not open a second authoritative project database unless ADR 0001 is
-updated to say why Studio's store cannot be that authority. That update has
-not been written.
+Studio's libSQL file is the project authority. Do not open a second one.
+ADR 0001 records why reuse is practical.
 
 These existing files stay what they are, and they are not the project store:
 
@@ -102,16 +111,14 @@ does not launch agents.
 
 ## Embedded UI
 
-No-go on `BrowserPanel`. Conditional go on a new `PanelType` with its own
-`WKWebView`. The full note is
+No-go on `BrowserPanel`. Go on a new `PanelType` whose `WKWebView` loads
+Studio's `http://127.0.0.1:<port>`. The full note is
 [react-panel-hosting.md](react-panel-hosting.md).
 
-The host copies `AgentSessionWebRendererCoordinator` (`loadFileURL`, one
-bridge, cancel other main-frame navigations) and adds the web-content
-termination reload that `MarkdownWebRenderer` already has. Do not share the
-browser profile's cookie store. Set a non-persistent or dedicated
-`WKWebsiteDataStore`; the agent-session configuration does not, and copying
-that omission shares the default store.
+Lock navigation to that origin, the way the agent-session host locks
+navigation to its shell URL. Add the web-content termination reload that
+`MarkdownWebRenderer` already has. Do not share the browser profile's
+cookie store. `loadFileURL` does not serve this Next.js app.
 
 ## Provider gates
 
@@ -201,8 +208,8 @@ infrastructure. Take the workflow ideas. Leave the emulator alone.
 | Closed pane switch | Every new panel is a cross-file compile break if one site is missed |
 | Provider gaps | Most installed agents do not block an in-flight tool. A workflow gate does not fill that gap |
 | Codex | Hook path is telemetry. Teams path is a different mechanism and not fully re-verified |
-| Studio unread | Private repo `ryanpedersonphotography/agentflow-studio` returned 404 to this token. SHA `35a0d1af631a53958883e61c1b98ab072195b11c` was not verified. Backend, license, and persistence are unknown |
-| Second database | Withdrawn as the default. Allowed only after Studio's store is shown to be impractical |
+| Studio license | No LICENSE file and no package.json license field. All rights reserved until the user grants otherwise. Stage 2 cannot bundle it before that grant |
+| Second database | Not recommended. Studio's libSQL file already stores projects, workflows, teams, tasks, and worktrees |
 | Session safety | Stuffing resume commands into the new database would bypass `SessionSnapshotImportTrust` |
 | `events.stream` discovery | Implemented, omitted from `system.capabilities` |
 | Socket default | A companion design that forgets `cmuxOnly` works in development and fails for users |
@@ -213,13 +220,16 @@ infrastructure. Take the workflow ideas. Leave the emulator alone.
 
 ## What approval needs to say
 
-The three points that used to end this file are withdrawn. Approval has to
-name these instead:
+Approval has to name these:
 
-1. ADR 0001 may stay withheld until Studio is readable, or the user may
-   choose A or B with the missing evidence listed as accepted risk.
-2. The React UI is hosted in a dedicated `WKWebView` panel. It is not
-   rewritten in SwiftUI, and it is not a `BrowserPanel`.
-3. Workflow-level gates are allowed for providers that cannot block an
+1. Stage 1 supervises the user's Studio checkout with plain Node. No second
+   database. No Electron window. No Studio sources in this repo.
+2. The React UI is a `WKWebView` on that server's loopback origin. It is
+   not rewritten in SwiftUI, and it is not a `BrowserPanel`.
+3. Stage 2, bundling Studio, waits on the user granting a GPL-compatible
+   license for that distribution. They are the copyright holder. The
+   archive does not contain that grant.
+4. Workflow-level gates are allowed for providers that cannot block an
    in-flight tool, with that limitation visible on the capability matrix.
-   Codex hook mode stays non-blocking for in-flight tools.
+   Studio's own `approval` step is that kind of gate. Codex hook mode in
+   cmux stays non-blocking for in-flight tools.

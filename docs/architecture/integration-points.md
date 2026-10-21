@@ -68,13 +68,12 @@ Reasons from code:
 [react-panel-hosting.md](react-panel-hosting.md). Short form:
 
 - A new `PanelType`, not `browser`.
-- `loadFileURL` (or the diff viewer's custom scheme, or a single localhost
-  origin if a backend audit later shows one), one script-message handler,
-  cancel any other main-frame navigation.
+- For Studio, load `http://127.0.0.1:<port>` and cancel every other
+  main-frame navigation. `loadFileURL` does not serve the Next.js app.
 - `webViewWebContentProcessDidTerminate` with a bounded reload, which
   `MarkdownWebRenderer` has and `AgentSessionWebRendererCoordinator` does not.
-- A non-persistent or dedicated data store. The agent-session web view does
-  not set one.
+- A data store that is not the browser profile. The agent-session web view
+  does not set one.
 
 `webviews/src/main.tsx` only mounts `agent-session` or `diff`. Adding a
 third page there is a frontend change plus a new native host. It is not a
@@ -109,7 +108,8 @@ Remote `cmux ssh` relays stay default-deny
 those methods work on a remote host.
 
 This is enough to orchestrate terminals from outside the process. It is not
-enough to put a Kanban view in a pane. The backend choice is withheld in
+enough to put Studio's task board in a pane. The recommendation is the
+staged hybrid in
 [adr-0001-orchestration-backend.md](adr-0001-orchestration-backend.md).
 
 ## Hook installation
@@ -238,16 +238,24 @@ human stopped a tool that had already run.
 | Grok, Copilot, CodeBuddy, Factory, Qoder, Kimi | No. Events are telemetry after classification | Workflow gate only |
 | Pi, OMP, Campfire, Amp, Antigravity, Rovo Dev, Muse | No Feed decision in the classifier | Workflow gate only |
 
-Studio's own approval gates were not read. If they exist, they still have
-to be classified as one of these two, per provider, before a workflow treats
-them as a stop.
+Studio's gates, read at archive `35a0d1af631a53958883e61c1b98ab072195b11c`,
+match this split. An `approval` step
+(`packages/orchestrator/src/workflows/steps/control.ts`) pauses the run in
+`waiting-approval` until `approve(runId, stepId)`. That cannot stop a tool
+the agent has already started. Inside workflows, routines, and team runs,
+Studio does not even ask: `PendingApprovals` in
+`packages/orchestrator/src/agents.ts` ends the turn and leaves the tool
+unrun, and the Claude CLI harness is started with `--permission-prompts none`
+(`packages/harness-coding/src/claude/cli.ts`). Chat is the place a person
+approves a tool. Codex's CLI gets an `approval_policy` setting
+(`codex/cli.ts`); that is the provider's own policy, not the workflow step.
 
 ## Companion-app boundary
 
 A separate app can own project records and call the socket for terminals,
 focus, events, and Feed *if* the user turns socket admission on. It cannot
 register a pane, read the full terminal emulator, or approve Chief cards in
-a release build. A project panel beside a terminal is in-process. Which
-process owns the project store is withheld; see
+a release build. A project panel beside a terminal is a `WKWebView` in-process, loading
+Studio's loopback server. That server owns the project store. See
 [adr-0001-orchestration-backend.md](adr-0001-orchestration-backend.md) and
 [target-architecture.md](target-architecture.md).

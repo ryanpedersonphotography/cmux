@@ -1,240 +1,240 @@
 # ADR 0001: Orchestration backend
 
-**Status: withheld. Not approved.** Phase 1 does not start from this record.
-The previous recommendation (an in-process Swift package with its own SQLite
-file) is withdrawn as the default. It is not replaced by a selection of
-AgentFlow Studio's backend. Neither option has the evidence this addendum
-requires.
+**Status: recommendation, awaiting approval.** Phase 1 does not start from
+this record. The recommendation is a staged hybrid that ends at option B.
+Option A is not recommended.
 
 Audited cmux baseline: `72a39c338ef6e4d37e9ab29892f6561df1527781`.
 
-## Decision
+Studio snapshot: a `git archive` of `35a0d1af631a53958883e61c1b98ab072195b11c`,
+extracted at `/tmp/agentflow-studio`. The archive has no `.git`, so this
+environment did not recompute that SHA. It was not committed into cmux, and
+nothing was pushed to the Studio repository.
 
-Do not choose an orchestration backend until AgentFlow Studio's tree has been
-read. Do not add a second authoritative project database on the strength of
-the Phase 0 proposal. Do not claim that Studio's TypeScript backend can run
-without Electron, and do not claim that it cannot.
+## Recommendation
 
-## Evidence
+Supervise AgentFlow Studio's existing Next.js server as a local Node
+process. Keep its libSQL file as the only project database. Host its React
+UI in a cmux `WKWebView` pointed at that server. Do not add a second
+SQLite file. Do not rewrite the UI in SwiftUI. Do not ship Electron inside
+cmux.
 
-Requested repository: `https://github.com/ryanpedersonphotography/agentflow-studio`
-(private). Requested revision: `35a0d1af631a53958883e61c1b98ab072195b11c` or
-later. That SHA was not resolved.
+Do this in two stages:
 
-On 2026-10-21, from this checkout, with `gh` authenticated as the Cursor
-GitHub App installation for `ryanpedersonphotography/cmux`:
+1. **Dev supervision, no bundling.** The cmux app starts the user's existing
+   Studio checkout with plain Node (`pnpm dev` or `next start`), sets
+   `GROKBOT_DATA_DIR`, and waits for `/api/health`. A panel loads
+   `http://127.0.0.1:<port>`. Studio's sources stay on disk where the user
+   already has them. They are not copied into this repo.
+2. **Ship the server inside the app only after a license grant.** Replace
+   Electron's `utilityProcess` with a plain Node child running Next's
+   standalone `server.js` directly. Drop `apps/desktop`. Bundle a Node
+   binary and the libSQL addon built for that Node, not for Electron.
+
+Option A (an in-process Swift package and a new SQLite file) stays
+available only if the user rejects running Node. The store below is
+practical to reuse, so A is not the default.
+
+## Evidence that the backend runs without Electron
+
+`pnpm dev` is `turbo run dev --filter=@grokbot/web`, which is
+`next dev` on `127.0.0.1:3300` (`package.json`, `apps/web/package.json`).
+No Electron import exists under `packages/` or `apps/web` or `apps/cli`.
+
+The desktop app is a shell around that server:
+
+- `apps/desktop/src/main/server.ts` forks Next's standalone
+  `apps/web/server.js` in an Electron `utilityProcess` and polls
+  `/api/health` until `body.app === "grokbot"` (60 s budget).
+- `apps/desktop/src/main/index.ts` then calls `BrowserWindow.loadURL` on
+  `http://127.0.0.1:<port>`. The preferred port is 47331
+  (`apps/desktop/src/main/port.ts`).
+- Crash restart is 1 s, then 5 s, then 15 s, and it stops after three
+  crashes inside two minutes (`apps/desktop/src/main/restart.ts`).
+
+One Electron file refuses to run as plain Node:
+`apps/desktop/src/main/server-host.ts` exits unless
+`process.parentPort` exists, which is the utility-process channel. That
+file is the packaged host, not the engine. `next dev`, `next start`, and
+Next's own `server.js` do not use it. A cmux supervisor should spawn those,
+not `server-host`.
+
+On 2026-10-21, in the extracted tree, with Node v22.23.3 and pnpm 12.8.1:
 
 | Command | Exit | Result |
 | --- | --- | --- |
-| `gh repo clone ryanpedersonphotography/agentflow-studio /tmp/audit-external/agentflow-studio -- --branch main` | 1 | `GraphQL: Could not resolve to a Repository with the name 'ryanpedersonphotography/agentflow-studio'.` |
-| `gh api repos/ryanpedersonphotography/agentflow-studio` | 1 | HTTP 404, `Not Found` |
-| `git ls-remote https://github.com/ryanpedersonphotography/agentflow-studio.git 35a0d1af631a53958883e61c1b98ab072195b11c` | 128 | `remote: Repository not found.` |
+| `pnpm install --frozen-lockfile` | 0 | 1,176 packages, 7.3 s |
+| `pnpm typecheck` (`turbo run typecheck`) | 0 | 22 packages, 42.6 s |
+| `pnpm test` (`turbo run test`) | 0 | 21 tasks, 17.6 s |
 
-The installation can see public repositories under
-`ryanpedersonphotography`. It cannot see this private repository. No file
-from Studio was read. `pnpm` and Node `v22.23.3` are installed here;
-`pnpm install`, typecheck, and tests were not run because there was no tree.
-The Studio repository was not modified and was not pushed to.
+`apps/e2e` exposes `test:e2e`, not `test`, so `pnpm test` did not run it.
+Desktop tests passed under Vitest with an Electron stub. That does not
+launch the Electron binary. The engine tests do not import Electron.
 
-These reported properties are therefore **unverified**. Each one still needs
-a path in Studio's tree:
+## Verified capabilities
 
-- pnpm/turbo monorepo
-- React UI
-- TypeScript/Node backend
-- Electron packaging
-- workflow execution
-- persistence
-- Claude Code adapter
-- Codex adapter
-- agent teams
-- git worktrees
-- approval gates
-- project management
-- MCP integration
-- a `LICENSE` file and its terms
+| Claim | Result | Where |
+| --- | --- | --- |
+| pnpm/turbo monorepo | Yes | Root `package.json` (`packageManager`: pnpm@12.8.1), `pnpm-workspace.yaml`, `turbo.json`. Workspace: `apps/*`, `packages/*` |
+| React UI | Yes. Next.js 16 App Router, React 19 | `apps/web`. Routes under `apps/web/app/(app)/` |
+| TypeScript/Node backend | Yes. The Next server plus workspace packages | `apps/web`, `packages/*`. CLI is `apps/cli` |
+| Electron packaging | Yes, optional shell | `apps/desktop` (`electron` 44.5.1, `electron-builder`). Product name "AgentFlow Studio" |
+| Workflow execution | Yes | `packages/orchestrator/src/workflows/runner.ts` (`createWorkflowRunner`) |
+| Persistence | Yes. One libSQL `documents` table | `packages/db/src/index.ts`. Default URL `file:./data/grokbot.db` or `GROKBOT_DATABASE_URL` |
+| Claude Code adapter | Yes. SDK and CLI | `packages/harness-coding/src/claude/sdk.ts`, `claude/cli.ts`. Ids from `plugin.ts`: `claude-code`, `claude-code-cli` |
+| Codex adapter | Yes. SDK and CLI | `packages/harness-coding/src/codex/sdk.ts`, `codex/cli.ts`. Ids: `codex`, `codex-cli` |
+| Agent teams | Yes | `packages/core/src/entities/team.ts` (`AgentTeam`). Runner: `packages/orchestrator/src/teams/runner.ts` |
+| Git worktrees | Yes | `packages/projects/src/slices/workspace/git.ts` (`git worktree add` / `remove`). Default directory `~/agentflow-studio/workspaces` (`service.ts` `DEFAULT_WORKTREES_DIR`) |
+| Approval gates | Yes, and they are the workflow kind | `packages/orchestrator/src/workflows/steps/control.ts` (`kind: "approval"`). See below |
+| Project management | Yes | `packages/projects` kernel and slices (agents, memory, workspace, tasks, knowledge, notes, milestones). Entity: `packages/core/src/entities/project.ts`. UI: `apps/web/app/(app)/projects/` |
+| MCP | Yes. Client and a server route | Client: `packages/connectors/src/runtime/` (`@modelcontextprotocol/sdk`). Server: `apps/web/app/api/mcp/route.ts` (ChatGPT bridge, Streamable HTTP) |
 
-## Electron independence (unanswered)
+Gemini CLI is a fifth coding harness in the same plugin. It was not one of
+the claims. It is real (`packages/harness-coding/src/gemini/cli.ts`).
 
-The question is whether Studio's workflow engine, persistence, project model,
-agent adapters, and MCP services can run as a plain Node process with no
-Electron main process.
+## Persistence is the project database
 
-This audit cannot list couplings it did not see. The inventory that a later
-pass must fill, with file paths, is:
+`createDatabaseStore` opens libSQL, sets WAL on local files, and stores
+every collection as JSON in `documents (collection, id, data)`. Core
+collections include `projects`, `teams`, `workflows`, `workflowRuns`,
+`agents`, and `sessions` (`packages/core/src/entities/index.ts`). Slice
+collections such as `tasks` (`packages/projects/src/slices/tasks/entities.ts`)
+and `worktrees` use the same table. `better-sqlite3` is not a dependency.
+`pnpm-workspace.yaml` sets `allowBuilds.better-sqlite3` to false. The
+native addon is `@libsql/client`.
 
-- `ipcMain` / `ipcRenderer`
-- preload scripts
-- `app.*`, including `app.getPath`
-- `BrowserWindow` and other Electron window types
-- native modules built against Electron's ABI (`better-sqlite3` and anything
-  else under `node_modules` that uses Node-API against Electron's headers)
-- any path that exists only after Electron has started
+A second Swift SQLite file would be a second authority for the same
+projects, tasks, and runs. This audit did not find a reason that makes
+that necessary. cmux's existing files (`session-*.json`, the agent
+journal, `cmux-sync.sqlite3`) stay what they are. They are not this store.
 
-Until that list exists, option B is a hypothesis.
+Busy timeout is 5 s (`packages/db/src/index.ts`). Two processes writing
+the same file will contend. The supervisor should run one server against
+the file.
 
-## Option A — in-process Swift package and a new SQLite file
+## Electron couplings
 
-This is what [target-architecture.md](target-architecture.md) recommended
-before this addendum. The shape, as a description of that proposal:
+Every import of `electron` is under `apps/desktop`:
 
-- A new Swift package in this GPL tree. The cmux process owns it.
-- The package imports Foundation and SQLite3. It does not import AppKit,
-  SwiftUI, Ghostty, WebKit, or `CmuxControlSocket`.
-- Project identity, plans, and workflow state live in a new SQLite file under
-  Application Support, separate from `session-<bundleId>.json`,
-  `agent-journal-<bundle>.sqlite3`, and `cmux-sync.sqlite3`.
-- cmux stays the authority for windows, workspaces, panes, terminals, and Feed.
+| File | What it uses |
+| --- | --- |
+| `src/preload/index.ts` | `contextBridge`, `ipcRenderer`. Exposes `window.agentflow` and `window.agentflowShell` |
+| `src/main/ipc.ts` | `ipcMain`, `BrowserWindow`, `dialog`, `shell`. Channels: pick folder, open external, shell state, retry, choose data dir, open logs, reveal data dir, quit. Each handler checks the sender frame |
+| `src/main/index.ts` | `app`, `BrowserWindow`, `Menu`, `session`, `shell`, `Tray`. `app.getPath("userData")` for `desktop.json` and `logs/server.log`. `app.whenReady` |
+| `src/main/window.ts` | `BrowserWindow`, preload, `contextIsolation`, `sandbox`, `nodeIntegration: false`. Loads the shell, then the server origin |
+| `src/main/menu.ts` | `app`, `BrowserWindow`, `Menu`, `Tray` |
+| `src/main/tray-icon.ts` | `nativeImage` |
+| `src/main/session.ts` | `Session` type |
+| `src/main/server.ts` | `utilityProcess.fork` of the server host |
+| `src/main/shell-protocol.ts` | `protocol.registerSchemesAsPrivileged`, `session.protocol.handle` for `afstudio-shell://shell` |
+| `src/main/server-host.ts` | No Electron import. Exits without `process.parentPort` |
 
-What the addendum changes: a second authoritative project database is allowed
-only when reusing Studio's persistence is shown to be impractical. That
-showing has not happened, because Studio's persistence was not read. Option A
-stays on the table as a fallback. It is not the decision.
+`app.getPath` is only the desktop config and log directory. The server's
+data directory is `GROKBOT_DATA_DIR`, passed in the child environment
+(`apps/desktop/src/main/data-dir.ts`). The web app does not call
+`app.getPath`.
 
-Option A also does not, by itself, host Studio's React UI. The addendum
-rejects a SwiftUI rewrite of that UI. If Studio's screens are the UI, option
-A still needs the panel host in
-[react-panel-hosting.md](react-panel-hosting.md), and those screens may call
-Electron IPC or a Studio API that this audit has not seen.
+The preload is optional for the product UI. `apps/web/features/shell/desktop.ts`
+reads `window.agentflow` and treats it as absent in a browser. Folder
+pick and "open external" are the pieces a Swift bridge would replace
+when the desktop shell is gone. Boot, first-run, recovery, and
+dev-waiting screens live in `apps/desktop/src/renderer` and are not the
+product UI.
 
-## Option B — Studio's backend as a supervised local service
+Native ABI: the Mac standalone trace in `apps/web/next.config.ts` pulls
+`@libsql/darwin-arm64`, `@anthropic-ai/claude-agent-sdk-darwin-arm64`, and
+`@openai/codex` darwin binaries into the app. Those are Node addons and
+CLI binaries, selected by OS, not compiled against Electron in this repo.
+A plain Node child must load the build that matches its ABI. This Linux
+install resolved the linux-x64 variants and the tests passed.
 
-The shape, as a constraint on a later design. None of the Studio-side cells
-are confirmed.
+## Approval gates inside Studio
 
-cmux launches one child process and supervises it. The child has no
-`BrowserWindow`. A small Swift bridge package owns project navigation, event
-subscriptions, panel registration, and lifecycle. Studio's React stays the
-UI and is hosted as in [react-panel-hosting.md](react-panel-hosting.md).
-Studio's store, if it can be opened without Electron, is the project
-database. cmux does not open a second one.
+An `approval` step pauses the workflow in `waiting-approval` until
+`approve(runId, stepId)` (`control.ts`). That is a harness gate between
+steps. It does not reach into a running CLI and cancel a tool.
 
-### Transport
+Agent tool approvals are a different gate, and Studio says they cannot be
+answered during workflows, routines, or team runs. `PendingApprovals` in
+`packages/orchestrator/src/agents.ts` stops the turn and does not run the
+tool. The message tells the user to run the task from chat. The Claude
+CLI harness passes `--permission-prompts none`
+(`packages/harness-coding/src/claude/cli.ts`) because a background run
+cannot answer a prompt. Codex passes `--config approval_policy=...`
+(`codex/cli.ts`). Chat is where a person can approve a tool. A workflow
+step cannot.
 
-Prefer a Unix socket the parent creates, mode `0600`, in a directory the
-parent owns. The alternative is `127.0.0.1` with a token generated per
-launch, passed on the child's argv or over the socket, and checked on every
-request. Do not reuse the cmux control socket. That socket defaults to
-`SocketControlMode.cmuxOnly` (`SocketControlSettings.swift:81-84`); opening
-it to `automation` or `password` admits every same-UID client, which is wider
-than one supervised child. Remote relay stays default-deny
-(`RemoteRelayCommandPolicy.swift:81-88`). The bridge does not assume the
-child is reachable through `cmux ssh`.
+## Transport, supervision, events
 
-Whether Studio already speaks either transport is unverified.
+Stage 1 uses the server Studio already binds: loopback HTTP. The desktop
+token (`x-grokbot-desktop`) is installed only through the utility-process
+handshake (`server-host.ts`, `apps/web/lib/server/request-guard.ts`). A
+`next dev` process does not install it. Loopback origin checks still
+apply. The WKWebView should be allowed to navigate only to that origin.
+Do not point it at the cmux control socket, and do not open
+`SocketControlMode` past `cmuxOnly` to make this work.
 
-### Supervision and crash recovery
+When a shipped build needs the desktop token, install it without
+`parentPort`. That is a small Studio-side change, not part of this audit's
+code.
 
-Start the child from `applicationDidFinishLaunching`
-(`Sources/AppDelegate.swift:1691`) and stop it from
-`applicationWillTerminate` (`Sources/AppDelegate.swift:2573`). The supervisor
-itself lives in the bridge package. The app delegate only calls start and
-stop.
+Restart policy to copy: the delays in `restart.ts`. On restart, Studio
+already fails queued and running workflow runs that this process is not
+executing, and it leaves approval pauses alone
+(`WorkflowRunnerService.recoverInterrupted`). The bridge should not invent
+a second recovery.
 
-On a child exit, restart with backoff. Each successful start mints a new
-`boot_id` for the bridge's view of the child. In-flight workflow steps are
-not assumed to have finished. The bridge marks them unknown and reconciles
-from Studio's store after the child is up again. That reconciliation
-procedure does not exist until the store has been read.
+cmux `seq` / `boot_id` stay the authority for cmux events
+(`CmuxEventBus.swift:258-263`). Studio has its own bus (`workflow.run`,
+`workflow.step`, `workflow.event` in `runner.ts`). Mapping those into
+cmux events is stage-1 bridge work. The child does not assign `seq`.
 
-A child crash must not be reported as a cmux crash, and a cmux crash is not
-recovered by this supervisor.
+Startup: the desktop host allows 60 s (`HEALTH_TIMEOUT_MS`). This audit
+did not measure a cold `next dev`. The panel should show a starting state
+until `/api/health` succeeds.
 
-### Startup latency
+## License and GPL bundling
 
-Not measured. A Node process plus a TypeScript server often takes longer
-than an in-process Swift open of SQLite. The number belongs in a later run
-of the real binary. Do not budget the panel on a guessed duration. The panel
-can show a starting state until the bridge receives the child's ready event.
+No `LICENSE` file exists anywhere in the archive. No `package.json` in the
+root or in any workspace package has a `license` field. The only
+"copyright" string is a sentence in a seeded persona
+(`packages/concierge/src/seed/agents.ts`), not a grant. Treat Studio as
+all rights reserved, owned by the user, until the user says otherwise.
 
-### One event protocol
+cmux's app and CLI are GPL-3.0-or-later. This is an engineering
+constraint, not a legal opinion.
 
-cmux's event log is the sequence authority: monotonic `seq`, `boot_id`,
-in-memory replay of 4,096 events, `resume.gap` when the cursor is stale
-(`CmuxEventBus.swift:258-263`, `subscribe` at line 471). Studio's own event
-shape was not read, so there is nothing to map yet.
+The user is the copyright holder of Studio, so they are the person who can
+grant a license for it. They cannot drop the GPL from cmux. If a cmux
+build ships Studio inside the app bundle and launches it as the app's
+backend, that distribution is one combined program. Recipients of a GPL
+binary are entitled to the corresponding source of the GPL work, and the
+Studio copyright holder has to license the Studio bits they ship under
+GPL-3.0-or-later, or under another license that GPL-3.0 can combine with,
+for that distribution. The user can make that grant. The archive does not
+make it.
 
-When a shape exists, the bridge assigns cmux `seq` values. It does not let
-the child pick `seq` or `boot_id`. A subscriber that resumes after a child
-restart sees a gap or a new `boot_id` and refreshes with a snapshot, the same
-rule `events.stream` already uses. Two streams (cmux's bus and Studio's bus)
-both exist until that mapping is implemented. The mapping is a translation
-at the bridge, not a second log that clients have to merge.
-
-Buffer sizes in `CmuxEventBus` stay as they are. Studio events that do not
-fit the 16 KiB frame are summarized and fetched by id.
-
-### GPL and bundling
-
-cmux's app and CLI are GPL-3.0-or-later. See `LICENSE` and
-[upstream-compatibility.md](upstream-compatibility.md). This is an
-engineering constraint, not a legal opinion.
-
-Studio's license was not opened. Bundling Studio inside a GPL app is
-undecided until that file is read:
-
-- A GPL-compatible license (MIT, BSD, Apache-2.0, GPL-3.0) can be distributed
-  with this tree if the notices travel with the bits. Apache-2.0 combines
-  with GPL-3.0, which is the license this repo states.
-- A proprietary license, the Business Source License, a non-commercial
-  license, or AGPL changes the answer. AGPL in particular reaches network
-  use. BUSL code in the upstream cmux tree is already out of bounds for this
-  work; Studio is a separate question and was not classified.
-- Shipping Studio as a subprocess inside `Cmux.app` is still distribution of
-  Studio. A socket between processes does not, by itself, remove that.
-
-Do not copy Studio sources into this repo, and do not copy them into any
-BUSL path, before the license is known. This ADR does not vendor anything.
-
-### Packaging Node
-
-Option B puts a Node binary in the app bundle, beside Studio's JavaScript
-and any native addons. That binary has to be signed and notarized with the
-app. It has to match the Mac architectures the app ships. It is not
-Electron's Node. A native addon compiled for Electron's ABI will fail to
-load in plain Node; `better-sqlite3` is the usual example, and this audit
-did not check whether Studio uses it.
-
-Electron-only APIs (`app.getPath`, `ipcMain`) have to be replaced or shimmed
-before the child can start. That work is in Studio or in a thin adapter, and
-it is unscoped until the coupling list exists.
-
-The cmux bundle today does not ship Node for this purpose. Adding it is a
-packaging change in the release path, which this audit did not design.
+Until that grant exists, do not copy Studio into this repository and do
+not place it in the `.app`. Stage 1 avoids that: it runs the checkout the
+user already has. Stage 2 is the point at which the grant has to exist.
+Do not copy Studio into any BUSL path.
 
 ## Comparison
 
-| Question | A. In-process Swift, new SQLite | B. Supervised Studio backend |
-| --- | --- | --- |
-| Reads Studio's code | No | Required, and not done |
-| Second project database | Yes. Blocked until Studio's store is shown impractical | Reuses Studio's store if that store can be opened without Electron. Unverified |
-| React UI | Does not host it unless the panel work in the hosting note is added | Hosts it. The UI's dependence on Electron is unverified |
-| Electron coupling | None from Studio | Unverified. The coupling list above is empty because the tree was closed |
-| Startup | No Node process. Latency unmeasured | Node plus Studio. Latency unmeasured |
-| Crash | A domain fault is in the app process | Child can restart. Recovery procedure unverified |
-| Events | Publish on `CmuxEventBus` in-process | Translate into cmux `seq` / `boot_id`. Studio's events unread |
-| Transport | None | Unix socket, or localhost plus a per-launch token. Not the cmux control socket |
-| GPL | New Swift in this repo is GPL-3.0-or-later | Depends on Studio's license, which was not read |
-| Node in the bundle | No | Yes, plus addon ABI and notarization |
+| Question | A. In-process Swift, new SQLite | B. Supervised Studio server | Staged hybrid (recommended) |
+| --- | --- | --- | --- |
+| Project database | A new file. Splits authority with `grokbot.db` | Studio's libSQL file | Same as B |
+| React UI | Would still have to host Studio or rewrite it. Rewrite is rejected | WKWebView at the server origin | Same as B |
+| Electron | None | Must be removed from the launch path | Stage 1 never starts it. Stage 2 deletes the dependency |
+| Plain Node | Not used | `next dev` / `next start` / standalone `server.js` work. `server-host.ts` does not | Stage 1 uses `next dev` or `next start`. Stage 2 uses `server.js` under plain Node |
+| GPL | New Swift in this repo is already GPL | Bundling needs the user's grant | Stage 1 does not distribute Studio. Stage 2 needs the grant |
+| Node in the bundle | No | Yes, at ship time | Stage 2 only |
+| Startup | No Node process | Next.js listen. Health budget in the desktop host is 60 s. Untimed here | Same |
 
-## What would select an option
+## What approval needs to accept
 
-Select B only if a later read shows all of the following:
-
-1. The workflow engine, persistence, project model, adapters, and MCP entry
-   points start in plain Node with the Electron main process absent.
-2. The Electron couplings are listed, and each one is either unused on that
-   path or replaced by the socket adapter.
-3. The persistence schema can be the only project database, opened by that
-   process, without a parallel Swift store.
-4. The license allows shipping those bits inside a GPL-3.0-or-later app bundle.
-5. A real `pnpm` typecheck and test run has exit codes recorded against a
-   SHA at or after `35a0d1af631a53958883e61c1b98ab072195b11c`.
-
-Select A only if that read shows the store or the engine cannot be reused,
-and the user accepts a new SQLite file as the project authority. Rewriting
-Studio's React UI in SwiftUI is not part of A.
-
-Until then the architecture in
-[target-architecture.md](target-architecture.md) stays awaiting approval,
-and [phase-1-plan-revised.md](phase-1-plan-revised.md) stays a plan.
+1. Stage 1 may supervise the user's Studio checkout. No second database.
+   No Electron window. No Studio sources in the cmux tree.
+2. Stage 2 waits on an explicit license grant before any Studio bits are
+   placed in the app bundle.
+3. Option A is not the path unless the user refuses a Node child.

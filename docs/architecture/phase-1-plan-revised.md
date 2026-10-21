@@ -12,55 +12,44 @@ packages, workflows, or AgentFlow Studio.
 
 ## Stop rule
 
-Phase 1 starts only after both of these are true:
+The Studio audit is done. ADR 0001 recommends a staged hybrid that ends at
+option B. Phase 1 still starts only after the user approves
+[target-architecture.md](target-architecture.md). This file does not
+approve it.
 
-1. Studio has been read at `35a0d1af631a53958883e61c1b98ab072195b11c` or a
-   later recorded SHA, and ADR 0001 has been updated from **withheld** to a
-   real selection.
-2. [target-architecture.md](target-architecture.md) is marked approved by
-   the user.
+## Studio checklist (done)
 
-Until then, the only unfinished audit work is the Studio checklist below.
-That checklist is still Phase 0. It is not Phase 1.
+Archive of `35a0d1af631a53958883e61c1b98ab072195b11c`, extracted outside
+this repo. No `.git` in the archive, so the SHA was not recomputed here.
+The tree was not modified and was not pushed. Paths and exit codes are in
+ADR 0001 and `reports/phase-0/baseline-results.json`.
 
-## Studio checklist (blocked on repository access)
-
-The clone failed. Commands and exit codes are in
-`reports/phase-0/baseline-results.json`. Do not invent paths. When a
-checkout exists, record the SHA, then verify each claim with a path or write
-"not found":
-
-| Claim | What to open |
+| Claim | Result |
 | --- | --- |
-| pnpm/turbo monorepo | Root `package.json`, `pnpm-workspace.yaml`, `turbo.json` |
-| React UI | App entry and the Kanban, Gantt, React Flow, Tiptap, and dashboard mounts, if they exist |
-| TypeScript/Node backend | The process entry that is not the Electron main |
-| Electron packaging | `ipcMain`, `ipcRenderer`, preload, `app.*`, `BrowserWindow`, `app.getPath` |
-| Native ABI | `better-sqlite3` and any other addon built for Electron |
-| Workflow execution | The function that runs a step |
-| Persistence | The database file, schema, and migrations. Decide whether a second project database is impractical, with the concrete reason |
-| Claude Code and Codex adapters | The modules that spawn or speak to each CLI |
-| Agent teams | The type that groups agents, or "not found" |
-| Git worktrees | The call that creates a worktree, or "not found" |
-| Approval gates | Distinguish a blocking provider hook from a harness wait. See the approval section in [integration-points.md](integration-points.md#approval-model) |
-| Project management | The project record and its id |
-| MCP | The client or server setup, or "not found" |
-| License | The `LICENSE` file, quoted by SPDX identifier only after it is read |
+| pnpm/turbo monorepo | Present |
+| React UI | Next.js App Router in `apps/web`. Task board, workflow React Flow, and notes textarea are present. Gantt and Tiptap are not |
+| TypeScript/Node backend | `next dev` / `next start`. Packages do not import Electron |
+| Electron packaging | `apps/desktop` only |
+| Native ABI | `@libsql/client`. `better-sqlite3` is not a dependency |
+| Workflow execution | `createWorkflowRunner` |
+| Persistence | One libSQL `documents` table. A second project database is not needed |
+| Claude Code and Codex | `packages/harness-coding` SDK and CLI harnesses |
+| Agent teams | `AgentTeam` and `createTeamRunner` |
+| Git worktrees | `packages/projects/src/slices/workspace/git.ts` |
+| Approval gates | Workflow `approval` step. Tool approvals are not answerable inside a workflow run |
+| Project management | `packages/projects` and `/projects` |
+| MCP | `packages/connectors` client and `apps/web/app/api/mcp/route.ts` |
+| License | No LICENSE file. No `license` field in any package.json. All rights reserved |
 
-Then run, in that checkout, and record real exit codes:
+`pnpm install --frozen-lockfile` exited 0. `pnpm typecheck` exited 0.
+`pnpm test` exited 0. `pnpm test:e2e` was not run.
 
-- `pnpm install`
-- the repo's typecheck script
-- the repo's test script
+## After approval, the only cmux edits
 
-Do not modify that repo and do not push to it.
-
-## After a decision, the only cmux edits
-
-Whichever option ADR 0001 selects, cmux changes stay inside the five
-boundaries below. Workflow rules, React screens, and the project store live
-in isolated packages (a Swift bridge package, Studio's existing packages, or
-both). They do not move into `Workspace.swift` or `CLI/cmux.swift`.
+The approved path is stage 1 of ADR 0001: a Swift bridge that supervises
+the user's Studio checkout and registers panels. Workflow rules, React
+screens, and the project store stay in Studio. They do not move into
+`Workspace.swift` or `CLI/cmux.swift`.
 
 Diff sizes are estimates from the call sites at
 `72a39c338ef6e4d37e9ab29892f6561df1527781`, not measured patches. Conflict
@@ -68,9 +57,10 @@ counts are `git rev-list --count upstream/main --since=2026-09-21`.
 
 ### 1. Project identity and navigation
 
-cmux workspaces stay layout. The project id lives in the store the ADR
-selects. The bridge keeps a side table from workspace UUID to project id.
-That table is not a new field on `Workspace`.
+cmux workspaces stay layout. The project id is Studio's `projects`
+collection (`packages/core/src/entities/project.ts`). The bridge keeps a
+side table from workspace UUID to that id. That table is not a new field
+on `Workspace` and it is not a second database.
 
 Native touch when a pane must open on a project:
 
@@ -134,8 +124,9 @@ authority. See the event section of ADR 0001.
 | Start in `applicationDidFinishLaunching` (`AppDelegate.swift:1691`) and stop in `applicationWillTerminate` (`AppDelegate.swift:2573`) | ~40 lines | 197 | High file, small hunk |
 | Supervisor, backoff, and ready handshake | The bridge package | 0 | Low in cmux. Behavior depends on Studio, which is unread |
 
-If ADR 0001 selects option A, this row shrinks to "no child process." The
-panel host still uses rows 1–4.
+Stage 1 starts `next dev` or `next start` here and stops it on terminate.
+The child is plain Node, not Electron's `utilityProcess`. Option A would
+delete this row. It is not the recommendation.
 
 ## Build gates
 
@@ -227,8 +218,9 @@ or `GLAEDA_ROUTE_APP_KEY`.
 ## Explicitly not in Phase 1
 
 - Rewriting Studio's React UI in SwiftUI.
-- A second project database, unless the Studio checklist shows why reuse
-  is impractical.
+- A second project database. Studio's libSQL file is the authority.
+- Copying Studio into this repo, or into the app bundle, before the user
+  grants a license for that distribution.
 - Edits under the BUSL paths named in `LICENSE`.
 - A Ghostty pin move, a second terminal, or a remote-relay allowlist entry.
 - Enabling GitHub Actions on the fork.

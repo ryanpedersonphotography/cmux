@@ -34,7 +34,7 @@
   "implementationCommit": "8926363815581a6b86d4ff2b012fe5a23ef05a66",
   "implementationCommitNote": "SHA of the commit that added the Phase 0 documents. A later commit only records this value in the JSON.",
   "architectureDecisions": [
-    "Withheld: ADR 0001 does not select an in-process Swift SQLite package or Studio's backend. Studio was not readable. A second project database is not the default. React hosting is a conditional go for a dedicated WKWebView panel and a no-go for BrowserPanel. Phase 1 is a plan only."
+    "Recommendation, awaiting approval: staged hybrid ending at option B. Supervise Studio's Next.js server with plain Node. Keep its libSQL file as the only project database. Host the UI in a WKWebView at 127.0.0.1. Do not bundle Studio until the user grants a license. Option A is not recommended."
   ],
   "knownLimitations": [
     "macOS app build and unit tests were not run.",
@@ -43,9 +43,10 @@
     "config-schema and feature-flags checks were skipped because they read BUSL paths under web/.",
     "BUSL server trees were not built.",
     "Codex Teams Feed reply path was identified but not executed.",
-    "agentflow-studio was not cloned. Requested SHA 35a0d1af631a53958883e61c1b98ab072195b11c was not verified.",
-    "pnpm install, Studio typecheck, and Studio tests were not run.",
-    "No GitHub Actions workflow was added or dispatched."
+    "No GitHub Actions workflow was added or dispatched.",
+    "Studio SHA 35a0d1af631a53958883e61c1b98ab072195b11c was supplied as a git archive with no .git, so the commit object was not recomputed here.",
+    "pnpm test:e2e was not run. pnpm test does not include apps/e2e.",
+    "The Electron binary was not launched. Desktop tests passed under Vitest with a stub."
   ],
   "checks": [
     {
@@ -239,28 +240,36 @@
       "summary": "remote: Repository not found."
     },
     {
-      "id": "studio-pnpm-install",
-      "status": "not_run",
+      "id": "studio-archive-extract",
+      "status": "passed",
       "gate": "linux",
-      "command": "pnpm install",
-      "exitCode": null,
-      "reason": "No checkout. pnpm is installed (Node v22.23.3). If Studio's install needs Electron native modules, the same command may later need a Mac. That was not observed."
+      "command": "tar -xzf uploads/agentflow-studio-35a0d1af.tar.gz -C /tmp/agentflow-studio",
+      "exitCode": 0,
+      "summary": "Extracted outside the cmux tree. No .git directory. Not committed."
+    },
+    {
+      "id": "studio-pnpm-install",
+      "status": "passed",
+      "gate": "linux",
+      "command": "pnpm install --frozen-lockfile",
+      "exitCode": 0,
+      "summary": "pnpm 12.8.1, Node v22.23.3. 1176 packages added. Done in 7.3s. Ran in /tmp/agentflow-studio."
     },
     {
       "id": "studio-typecheck",
-      "status": "not_run",
+      "status": "passed",
       "gate": "linux",
       "command": "pnpm typecheck",
-      "exitCode": null,
-      "reason": "No checkout. The script name is the conventional one and was not confirmed in a package.json."
+      "exitCode": 0,
+      "summary": "turbo run typecheck. 22 packages successful. 42.639s."
     },
     {
       "id": "studio-test",
-      "status": "not_run",
+      "status": "passed",
       "gate": "linux",
       "command": "pnpm test",
-      "exitCode": null,
-      "reason": "No checkout. The script name was not confirmed in a package.json."
+      "exitCode": 0,
+      "summary": "turbo run test. 21 tasks successful. 17.641s. apps/e2e has test:e2e and was not part of this command."
     }
   ],
   "counts": {
@@ -297,32 +306,27 @@
     "url": "https://github.com/ryanpedersonphotography/agentflow-studio",
     "requestedSha": "35a0d1af631a53958883e61c1b98ab072195b11c",
     "resolvedSha": null,
+    "snapshot": "user-supplied git archive uploads/agentflow-studio-35a0d1af.tar.gz, extracted at /tmp/agentflow-studio",
+    "gitMetadata": false,
     "repoModified": false,
     "pushed": false,
-    "claimsVerified": false,
-    "claims": [
-      "pnpm/turbo monorepo",
-      "React UI",
-      "TypeScript/Node backend",
-      "Electron packaging",
-      "workflow execution",
-      "persistence",
-      "Claude Code adapter",
-      "Codex adapter",
-      "agent teams",
-      "git worktrees",
-      "approval gates",
-      "project management",
-      "MCP integration"
-    ],
-    "note": "Every claim is unverified. The GitHub App installation for ryanpedersonphotography/cmux cannot see this private repository."
+    "committedIntoCmux": false,
+    "license": "none found. No LICENSE file. No license field in the root or any workspace package.json. Treated as all-rights-reserved, owned by the user.",
+    "claimsVerified": true,
+    "recommendation": "staged hybrid ending at B, awaiting approval",
+    "checks": {
+      "pnpmInstallExit": 0,
+      "typecheckExit": 0,
+      "testExit": 0
+    }
   },
   "addendum": {
     "acceptedPhase0AsAuditOnly": true,
     "implementationArchitectureApproved": false,
     "phase1Started": false,
     "adr": "docs/architecture/adr-0001-orchestration-backend.md",
-    "adrStatus": "withheld"
+    "adrStatus": "recommended_staged_hybrid_awaiting_approval",
+    "studioSnapshotAudited": true
   },
   "addendumCommit": "23319ce2a4b37d92f48ec5332d8e4d8b498a96cd",
   "addendumCommitNote": "SHA of the commit that added the addendum documents. A later commit only records this value."

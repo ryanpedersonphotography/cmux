@@ -4,10 +4,8 @@
 and not approval to start Phase 1.**
 
 Audited cmux baseline: `72a39c338ef6e4d37e9ab29892f6561df1527781`.
-AgentFlow Studio's React tree was not readable. See
-[adr-0001-orchestration-backend.md](adr-0001-orchestration-backend.md).
-This note says how cmux can host a bundled React view. It does not say that
-Studio's screens already load this way.
+Studio snapshot: archive of `35a0d1af631a53958883e61c1b98ab072195b11c`.
+See [adr-0001-orchestration-backend.md](adr-0001-orchestration-backend.md).
 
 ## Verdict
 
@@ -17,17 +15,70 @@ A project UI that is a browser pane is tied to `BrowserProfileStore`, the
 address-bar chrome, and `BrowserAvailabilitySettings`, which can close
 browser panes.
 
-**Conditional go for a new `PanelType` whose view owns a `WKWebView`.**
-The host copies `AgentSessionWebRendererCoordinator` for loading and for
-the script bridge, and it copies `MarkdownWebRenderer`'s
-`webViewWebContentProcessDidTerminate` reload, which the agent-session host
-does not implement. Several such panels can be on screen together. Each one
-is its own coordinator and its own web view.
+**Go for a new `PanelType` whose `WKWebView` loads Studio's loopback
+origin.** The condition that was open in the previous draft is met.
+Studio's product UI is a Next.js server, not a static bundle. `loadFileURL`
+and a custom scheme do not serve it. Several panels can be on screen
+together: each is its own web view, each loads a path on the one server.
+A SwiftUI rewrite of this UI is out of scope.
 
-The condition: the React assets can be served by one of the three loaders
-below, and every native message comes from the trusted main frame. Studio
-has not been shown to meet that condition. A SwiftUI rewrite of Studio's
-UI is out of scope.
+Keep the agent-session lockdown for navigation and messages, and add the
+termination reload from `MarkdownWebRenderer`. The document URL is
+`http://127.0.0.1:<port>/...`, not a file URL.
+
+## What Studio's UI contains
+
+Snapshot `35a0d1af631a53958883e61c1b98ab072195b11c` (archive, no `.git`).
+The product UI is `apps/web`: Next.js 16 App Router, React 19. The router
+is the `app/` directory. There is no client-side router beside it.
+
+Pages under `apps/web/app/(app)/`:
+
+| Path | What it is |
+| --- | --- |
+| `/` | New chat, plus a bot side panel (`app/(app)/page.tsx`) |
+| `/chat/[id]` | An existing conversation |
+| `/agents`, `/teams`, `/rooms` | Registries and detail pages |
+| `/workflows`, `/workflows/[id]`, runs under that | Workflow editor and run views |
+| `/projects`, `/projects/[slug]/...` | Project shell. Slice pages live in `apps/web/features/projects/slices/` |
+| `/routines`, `/connections`, `/skills`, `/plugins` | Schedules, MCP connections, skills, plugins |
+| `/imagine`, `/harnesses`, `/models` | Media, coding harnesses, model settings |
+| `/settings`, `/appearance` | Settings |
+| `/onboarding` | First-run setup (`app/onboarding/page.tsx`) |
+
+The five surfaces named in the addendum, checked in this tree:
+
+| Asked | Present |
+| --- | --- |
+| Kanban | No package by that name. The task slice is a column board: `apps/web/features/projects/slices/tasks/task-board.tsx`, columns from `board.ts` |
+| Gantt | Not present. Milestones are a plan outline (`slices/milestones/page.tsx`, `PlanView`), not a chart |
+| React Flow | Yes. `@xyflow/react` in `apps/web/package.json`. Canvas: `features/workflows/components/flow-canvas.tsx` |
+| Tiptap | Not present. Notes are a textarea with a Streamdown preview (`slices/notes/editor.tsx`, `MarkdownNoteEditor`) |
+| Agent dashboard | No route by that name. `/` is chat plus `BotPanelSlot`. Teams have `/teams` and `/teams/[id]` |
+
+Build output:
+
+- `next dev` / `next build` / `next start` use `.next`. `output: "standalone"`
+  is set only when `GROKBOT_STANDALONE=1` (`apps/web/next.config.ts`). That
+  is the server the Mac app bundles. There is no `output: "export"`.
+- Electron's own UI is a separate Vite renderer
+  (`apps/desktop/src/renderer`): Booting, FirstRun, Recovery, DevWaiting.
+  `electron-vite` writes `apps/desktop/out/`. The packaged page is
+  `afstudio-shell://shell/index.html` (`shell-protocol.ts`, `guards.ts`).
+  After `/api/health`, the window leaves that scheme and loads the Next
+  origin (`apps/desktop/src/main/index.ts` `allWindowsToApp`).
+
+`loadFileURL` cannot host this UI. Pages are server components, and the
+API routes (`/api/mcp`, workflow webhooks, health) live in the same
+process. The shell scheme cannot host it either: that handler only reads
+files out of the desktop renderer directory. cmux should draw boot and
+crash states itself and load the Next origin for every product view.
+
+A dedicated data store for this panel type should not be the browser
+profile. It does not have to be non-persistent: stage 1 has no login
+cookie. If a later build installs the desktop token, the web view must
+send `x-grokbot-desktop` (`apps/web/lib/server/request-guard.ts`). Stage 1
+does not install that token, which matches `pnpm dev`.
 
 ## What already exists
 
@@ -66,35 +117,35 @@ Another screen is a new mount plus a native host, not a browser setting.
 
 ## Several views at once
 
-Kanban, Gantt, React Flow, Tiptap, and an agent dashboard can coexist as
-**separate panels**. The agent-session pattern is already one web view per
-panel: `ensureWebView` stores a single `WKWebView` on the coordinator, and
-each panel has its own coordinator. Nothing in that type limits the count
-to one panel per window.
+Studio already mounts its screens as Next routes on one origin. A cmux
+panel that should show the task board loads `/projects/<slug>/tasks` (the
+slice path the project shell uses). A panel that should show the workflow
+canvas loads `/workflows/<id>`. Each panel is one `WKWebView`, the same
+shape as `ensureWebView`. They share the Node server. They do not share a
+web-content crash: termination is per web view.
 
-They can also coexist as routes inside one React bundle and one web view.
-That is one panel identity and one crash domain. Use it when the screens
-share one document. Use separate panels when the user splits or restores
-them independently. cmux does not provide a React tree that mounts those
-five screens today, and Studio's tree was not checked for them.
+Putting every route in one web view is also possible, by navigating that
+view. Use separate panels when the user splits or restores them
+independently. Gantt and Tiptap are not in the tree, so there is nothing
+to mount for those two names.
 
 ## How the web view gets its document
 
-| Loader | Where cmux uses it | Fit for a Studio panel |
+| Loader | Where it exists | Fit for Studio |
 | --- | --- | --- |
-| `loadFileURL` | Agent session, line 153 | A static bundle inside the app. Trust is an exact `file://` URL. `allowingReadAccessTo` on `Bundle.main.resourceURL` lets the page read that directory. Prefer a narrower directory if the bundle can be split out. |
-| Custom scheme | `cmux-diff-viewer://` plus a token allowlist | Session-scoped assets. The scheme handler serves only registered files. The bridge checks the scheme and token the way the diff viewer checks `hasActiveSession`. |
-| Localhost | Not used by the agent-session host | Only if Studio's backend is actually an HTTP service on `127.0.0.1`. Unverified. The navigation policy would allow exactly one origin (host, port, and scheme) and cancel every other main-frame load. The bridge would require that same origin on the main frame. A file-URL equality check does not transfer to HTTP. |
+| `loadFileURL` | Agent session, line 153 | Not for this UI. There is no static export. |
+| Custom scheme | cmux `cmux-diff-viewer://`. Studio `afstudio-shell://shell` | Studio's scheme serves the four boot screens only. Do not point a product panel at it. |
+| Localhost | Studio's Next server, `127.0.0.1` | This is the loader. Allow exactly one origin (scheme, host, port) and cancel every other main-frame load. Trust script messages only from that origin's main frame. |
 
 Arbitrary navigation stays cancelled, including `target=_blank`. The host
 returns `nil` from `createWebViewWith`. Links that should leave the panel
 go through the same external-link handoff the agent session uses, or they
 are ignored.
 
-A localhost origin also needs the per-launch token from
-[adr-0001](adr-0001-orchestration-backend.md). The token is checked on the
-request. It is not placed in a URL that the event log or WebKit's
-back-forward list would retain.
+Stage 1 does not install Studio's desktop token. The page is the loopback
+origin, which is the check `pnpm dev` already uses. A later shipped build
+that installs `x-grokbot-desktop` must send it on requests and must not
+put it in a URL the event log or the back-forward list would retain.
 
 ## Native and JS messages
 
@@ -124,7 +175,7 @@ any other web view that uses the default store.
 | Event | Required behavior |
 | --- | --- |
 | Suspend / leave the window | Expect WebKit to reclaim the WebContent process, as the markdown host documents at `MarkdownWebRenderer.swift:815-819`. On re-entry, reload if the shell is gone. Keep the panel id. |
-| Reload | `loadFileURL` or the scheme URL again. Re-bind the bridge. Do not allocate a new panel id. |
+| Reload | Load the same loopback path again. Do not allocate a new panel id. |
 | `webViewWebContentProcessDidTerminate` | Implement it. Markdown reloads with a bounded counter (`MarkdownWebRenderer.swift:797-812`). The agent-session coordinator does not, so a crash there stays blank until something else reloads. A new host follows markdown: count attempts, then stop and show a failed state. |
 | App quit | `close()` removes the script handler and drops the web view, as `AgentSessionWebRendererCoordinator.close` does at lines 173-194. |
 
